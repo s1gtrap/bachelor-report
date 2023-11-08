@@ -1,0 +1,427 @@
+\documentclass{article}
+\usepackage[T1]{fontenc}
+\usepackage[style=ieee, backend=bibtex8]{biblatex}
+\usepackage{beramono}
+\usepackage{courier}
+\usepackage{filecontents}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{listings}
+\usepackage{realboxes}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{xpatch}
+
+
+
+\titleformat{\paragraph}
+{\normalfont\normalsize\bfseries}{\theparagraph}{1em}{}
+\titlespacing*{\paragraph}
+{0pt}{3.25ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+
+
+\lstdefinelanguage{none}{
+  identifierstyle=
+}
+
+\definecolor{mygreen}{rgb}{0,0.6,0}
+\definecolor{mygray}{rgb}{0.5,0.5,0.5}
+\definecolor{mymauve}{rgb}{0.58,0,0.82}
+\definecolor{mygray}{rgb}{0.94,0.94,0.94}
+
+
+
+
+\addbibresource{\jobname.bib}
+\AtEveryBibitem{\printfield{note}\clearfield{note}\item}
+
+
+\lstset{ 
+  backgroundcolor=\color{mygray},   % choose the background color; you must add \usepackage{color} or \usepackage{xcolor}; should come as last argument
+  breakatwhitespace=false,         % sets if automatic breaks should only happen at whitespace
+  basicstyle=\ttfamily,
+  breaklines=true,                 % sets automatic line breaking
+  captionpos=b,                    % sets the caption-position to bottom
+  commentstyle=\color{mygreen},    % comment style
+  deletekeywords={...},            % if you want to delete keywords from the given language
+  escapeinside={\%*}{*)},          % if you want to add LaTeX within your code
+  extendedchars=true,              % lets you use non-ASCII characters; for 8-bits encodings only, does not work with UTF-8
+  firstnumber=1000,                % start line enumeration with line 1000
+  frame=none,	                   % adds a frame around the code
+  keepspaces=true,                 % keeps spaces in text, useful for keeping indentation of code (possibly needs columns=flexible)
+  keywordstyle=\color{blue},       % keyword style
+  language=Octave,                 % the language of the code
+  morekeywords={*,...},            % if you want to add more keywords to the set
+  numbers=none,                    % where to put the line-numbers; possible values are (none, left, right)
+  numbersep=5pt,                   % how far the line-numbers are from the code
+  numberstyle=\tiny\color{red}, % the style that is used for the line-numbers
+  rulecolor=\color{black},         % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
+  showspaces=false,                % show spaces everywhere adding particular underscores; it overrides 'showstringspaces'
+  showstringspaces=false,          % underline spaces within strings only
+  showtabs=false,                  % show tabs within strings adding particular underscores
+  stepnumber=2,                    % the step between two line-numbers. If it's 1, each line will be numbered
+  stringstyle=\color{mymauve},     % string literal style
+  tabsize=2,	                   % sets default tabsize to 2 spaces
+  title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
+}
+
+
+\title{Implementation of register allocation to translate \lstinline!LLVM--! to x86}
+\author{William Welle Tange}
+\date{2023}
+
+
+\makeatletter
+\xpretocmd\lstinline{\Colorbox{mygray}\bgroup\appto\lst@DeInit{\egroup}}{}{}
+\makeatother
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+\section{Review of literature}
+
+
+%* todo: ssa/llvm vs appel analysis
+%
+%* henvis til blog posts som archive
+%
+%    * så tæller det som litteratur
+%    
+%* tag essensen ud af hvad der bliver sagt i teksten
+%
+%    * som er relevant for mit arbejde
+%    
+%* HENVIS TIL KAPITEL 19 OM SSA FORM
+%
+%* linear scan approach
+%
+%* snak om hvilke dele af bogen i hvilken rækkefølge
+%
+%Appel (208p):
+%
+%* Translation To Intermediate Code (153-179, 26p)
+%
+%* Basic Blocks And Traces (179-193, 14p)
+%
+%*Instruction Selection (193-219, 26p)
+%
+%* Liveness Analysis (219-237, 18p)
+%
+%* Register Allocation (237-267, 30p)
+%
+%* Dataflow Analysis (387-415, 28p)
+%
+%* Loop Optimizations (415-439, 24p)
+%
+%* Static Single Assignment Form (439-481, 42p)
+%
+%*using IR when only translating from one language to another:
+%
+%>Even when only one front end and one back end are being built, a good IR can modularize the task, so that the front end is not complicated with machine-specific details, and the back end is not bothered with information specific to one source language.
+    
+
+\section{Limited instruction set of \lstinline!LLVM--!}
+
+The intermediate representation emitted by the frontend of a compiler serves as a stepping stone independent of the target architecture. The \lstinline!LLVM! infrastructure is the industry standard in terms of bridging this gap and was consequently the library used to translate the semantically annotated abstract syntax tree to executable machine code in the 2022 compilers course. As this project is an expansion on this, it follows naturally to build on this. 
+
+The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as neither of the languages implemented support exception handling, floating point operations and so on, and instead only strive for a seemingly comfortanle middle ground.
+
+The instructions included are
+\begin{enumerate}
+    \item binary operations of \lstinline!add!, \lstinline!and!, \lstinline!ashr!, \lstinline!lshr!, \lstinline!mul!, \lstinline!or!, \lstinline!sdiv!, \lstinline!srem!, \lstinline!shl!, \lstinline!sub! and \lstinline!xor!
+    \item logic/arithmetic comparison of \lstinline!icmp! (conditions being \lstinline!eq!, \lstinline!ne!, \lstinline!sge!, \lstinline!sgt!, \lstinline!sle! and \lstinline!slt!)
+    \item memory/address operations of \lstinline!alloca!, \lstinline!gep!, \lstinline!load! and \lstinline!store!
+    \item trivial/non-trivial \lstinline!mov! operations \lstinline!gep!, \lstinline!phi!, \lstinline!ptrtoint! and \lstinline!zext!
+    \item control flow operations of \lstinline!call!
+\end{enumerate}
+with only three possible block terminators 
+\begin{enumerate}
+    \item \lstinline!br! with an optional condition
+    \item \lstinline!ret!
+    \item \lstinline!unreachable!
+\end{enumerate}
+
+
+
+\section{LLVM -> CFG}
+
+%* description of blocks, how they connect etc.
+
+\section{CFG -> INTERF}
+
+%* describe the dataflow algorithm from the book
+%
+%* describe the interference criteria from the book
+
+\section{INTERF -> DOT}
+
+%* ez ???
+
+\section{INTERF -> DOT/Assignment}
+
+%* list of methods for coalescing/allocating:
+%
+%    * ocamlgraph builtin
+%
+%    * greedy 
+%
+%    * briggs
+%
+%    * george
+%
+%    * welsh-powell?
+
+\section{Naive Codegen}
+
+%* safest possible x86 translation
+%
+%    * moving sys-v abi arguments to assigned registers is treacherous
+
+\section{Linear scan approach}
+
+%Live ranges for each of the temporaries are derived by visiting each instruction of each control flow block and examining its \textit{uses} and \textit{defs}.
+
+\section{Benchmarking}
+Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{AM1}) despite the target instruction set being x86-64. This is possible because of Rosetta 2, which  translates x86-64 to ARMv8 before execution \cite{A2012}.  Time is measured using the \lstinline!time! function of the bash shell as it is native to the chosen Docker image.  As all execution relevant to the performance of register allocation is done in user mode, only the \lstinline!user! metric is noted.
+
+%* fib
+%* ack
+%* \lstinline!/usr/bin/time -al! counts cpu cycles
+
+
+\section{Evaluation}
+%Benchmarks are performed in the environment described by the Dockerfile in the repository and executed on an Apple Silicon/M1 chip. Time is measured using the \lstinline!time! function of the bash shell as it is native to the chosen Docker image.  As all execution relevant to the performance of register allocation is done in user mode, only the \lstinline!user! metric is noted.
+
+
+%TODO:
+%
+%* should I use shell time, or /usr/bin/time?
+%* how do I measure cpu cycles?
+
+
+\section{Comparison to other work and ideas for future work}
+
+
+\section{Conclusion}
+
+
+%\quickcharcount{main}
+
+%\defbibnote{myprenote}{This thesis is based on the following original publications:}
+%\printbibliography[prenote=myprenote,title={References}]
+\printbibliography[title={References}]
+
+\appendix
+
+\newpage
+\section{Benchmarks}
+
+\subsection{\lstinline!benches/fib.ll!}
+\begin{lstlisting}[language=LLVM]
+declare i32 @atoi(i8*)
+define i32 @fib(i32 %n0) {
+  %cn =  icmp sle i32 %n0, 2
+  br i1 %cn, label %base, label %rec
+base:
+  ret i32 1
+rec:
+  %n1 = sub i32 %n0, 1
+  %v0 = call i32 @fib(i32 %n1)
+  %n2 = sub i32 %n0, 2
+  %v1 = call i32 @fib(i32 %n2)
+  %v2 = add i32 %v1, %v2
+  ret i32 %v2
+}
+define i32 @main(i32 %argc, i8** %argv) {
+  %arg1ptr = getelementptr i8*, i8** %argv, i64 1
+  %arg1 = load i8*, i8** %arg1ptr
+  %n = call i32 @atoi(i8* %arg1)
+  call i32 @fib(i32 %n)
+  ret i32 0
+}
+
+\end{lstlisting}
+
+\subsubsection{\lstinline!make fib-clang!}
+\begin{lstlisting}[language=none]
+$ make fib-clang
+clang -O0 -target x86_64-unknown-darwin benches/fib.ll -o fib-clang
+\end{lstlisting}
+\paragraph{\lstinline!make bench fib-clang 42!}
+\begin{lstlisting}[language=none]
+$ make bench fib-clang 42
+/usr/bin/time -al ./fib-clang 42
+        1.58 real         1.56 user         0.00 sys
+             2678784  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                 765  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                  29  involuntary context switches
+         11000239251  instructions retired
+          4962802652  cycles elapsed
+             1708928  peak memory footprint
+\end{lstlisting}
+\paragraph{\lstinline!make bench fib-clang 43!}
+\begin{lstlisting}[language=none]
+make bench fib-clang 43
+$ /usr/bin/time -al ./fib-clang 43
+        2.71 real         2.49 user         0.00 sys
+             2678784  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                 700  page reclaims
+                  66  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  13  voluntary context switches
+                  32  involuntary context switches
+         17797124508  instructions retired
+          8035601598  cycles elapsed
+             1708928  peak memory footprint
+\end{lstlisting}
+
+\paragraph{\lstinline!make bench fib-clang 44!}
+\begin{lstlisting}[language=none]
+$ make bench fib-clang 44
+/usr/bin/time -al ./fib-clang 44
+        4.06 real         4.04 user         0.00 sys
+             2678784  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                 700  page reclaims
+                  66  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   5  voluntary context switches
+                  29  involuntary context switches
+         28781328564  instructions retired
+         12988681489  cycles elapsed
+             1708928  peak memory footprint
+\end{lstlisting}
+
+
+\paragraph{\lstinline!make bench fib-clang 45!}
+\begin{lstlisting}[language=none]
+$ make bench fib-clang 45
+/usr/bin/time -al ./fib-clang 45
+        6.54 real         6.51 user         0.00 sys
+             2678784  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                 700  page reclaims
+                  66  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   6  voluntary context switches
+                  39  involuntary context switches
+         46555259189  instructions retired
+         20968319385  cycles elapsed
+             1708928  peak memory footprint
+\end{lstlisting}
+
+
+
+\paragraph{\lstinline!make bench fib-clang 46!}
+\begin{lstlisting}[language=none]
+$ make bench fib-clang 46
+/usr/bin/time -al ./fib-clang 46
+       10.58 real        10.54 user         0.00 sys
+             2678784  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                 700  page reclaims
+                  66  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   5  voluntary context switches
+                 107  involuntary context switches
+         75314385847  instructions retired
+         33939361073  cycles elapsed
+             1725376  peak memory footprint
+\end{lstlisting}
+
+
+
+\paragraph{\lstinline!make bench fib-clang 47!}
+\begin{lstlisting}[language=none]
+$ make bench fib-clang 47
+/usr/bin/time -al ./fib-clang 47
+       17.09 real        17.06 user         0.00 sys
+             2678784  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                 766  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                 100  involuntary context switches
+        121838577947  instructions retired
+         54901966523  cycles elapsed
+             1708928  peak memory footprint
+\end{lstlisting}
+
+
+
+\paragraph{\lstinline!make bench fib-clang 48!}
+\begin{lstlisting}[language=none]
+$ make bench fib-clang 48
+/usr/bin/time -al ./fib-clang 48
+       27.65 real        27.59 user         0.00 sys
+             2678784  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                 766  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                 161  involuntary context switches
+        197130073055  instructions retired
+         88835375488  cycles elapsed
+             1708928  peak memory footprint
+\end{lstlisting}
+
+
+\end{document}
