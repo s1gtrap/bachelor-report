@@ -1,16 +1,25 @@
 \documentclass{article}
+\usepackage[style=ieee]{biblatex}
+
+
+\addbibresource{\jobname.bib}
+%\AtEveryBibitem{\printfield{note}\clearfield{note}\item}
+
+
+\usepackage{tikz}
+\usetikzlibrary{chains}
+\usepackage{graphicx} % Required for inserting images
 \usepackage[T1]{fontenc}
-\usepackage[style=ieee, backend=bibtex8]{biblatex}
 \usepackage{beramono}
 \usepackage{courier}
-\usepackage{filecontents}
-\usepackage{graphicx} % Required for inserting images
 \usepackage{listings}
+\usepackage{xpatch}
+\usepackage{xcolor}
 \usepackage{realboxes}
 \usepackage{titlesec}
-\usepackage{xcolor}
-\usepackage{xpatch}
 
+
+\setcounter{secnumdepth}{4}
 
 
 \titleformat{\paragraph}
@@ -30,10 +39,11 @@
 
 
 
-
-\addbibresource{\jobname.bib}
-\AtEveryBibitem{\printfield{note}\clearfield{note}\item}
-
+%%% Wrap colorbox around lstinline %%%
+\makeatletter
+\xpretocmd\lstinline{\Colorbox{mygray}\bgroup\appto\lst@DeInit{\egroup}}{}{}
+\makeatother
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \lstset{ 
   backgroundcolor=\color{mygray},   % choose the background color; you must add \usepackage{color} or \usepackage{xcolor}; should come as last argument
@@ -64,35 +74,62 @@
   title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
 }
 
-
-\title{Implementation of register allocation to translate \lstinline!LLVM--! to x86}
+\title{Implementation and comparison of register allocation to translate \lstinline!LLVM--! to x86}
 \author{William Welle Tange}
 \date{2023}
 
-
-\makeatletter
-\xpretocmd\lstinline{\Colorbox{mygray}\bgroup\appto\lst@DeInit{\egroup}}{}{}
-\makeatother
 
 \begin{document}
 
 \maketitle
 
+\tableofcontents
+\newpage
+
+%% TODO: tjek hvad LLVM gør %%
+
+
+%\texttt{LLVM-{}-2}
+%* skab så mange underpunkter som muligt
+    %* jo mindre man skal overskue af gangen jo lettere er det at komme i gang med at skrive
+    
+
 \section{Introduction}
+
+Compilers can be divided into several distinct phases, with the two halfs of which colloquially referred to as the \textit{frontend} and \textit{backend} stages. With the former serving the purpose of translating a high-level programming language to an \textit{intermediate representation} (IR) layer and the latter translating said IR to executable machine code on a target platform.
+
+\begin{figure}[h]
+  \centering
+\includegraphics[width=0.8\textwidth]{phases.png}
+\caption{Compiler phases}
+\end{figure}
+
+
+%* overfladisk intro til hvad helvede register allokering er og hvorfor
+    %* hovedtræk
+%* rudimentær del af compilation/oversættelse fra high-level sprog til x86 er register allokering
+    %* projektet er skridtet videre fra compilers kurset
+    %* siger hvad jeg står ovenpå/bygger på
+%snak om hvorfor jeg valgte llvm/ssa frem for x86 til global register llocation
+
 
 \section{Review of literature}
 
+Write about Appel book.
+
+Write about SSA form liveness analysis. 
+
+Keywords: program points, dataflow equations, fixed point
+
+
+
 
 %* todo: ssa/llvm vs appel analysis
-%
 %* henvis til blog posts som archive
-%
 %    * så tæller det som litteratur
-%    
 %* tag essensen ud af hvad der bliver sagt i teksten
+    %* som er relevant for mit arbejde
 %
-%    * som er relevant for mit arbejde
-%    
 %* HENVIS TIL KAPITEL 19 OM SSA FORM
 %
 %* linear scan approach
@@ -100,100 +137,114 @@
 %* snak om hvilke dele af bogen i hvilken rækkefølge
 %
 %Appel (208p):
-%
-%* Translation To Intermediate Code (153-179, 26p)
-%
-%* Basic Blocks And Traces (179-193, 14p)
-%
-%*Instruction Selection (193-219, 26p)
-%
-%* Liveness Analysis (219-237, 18p)
-%
-%* Register Allocation (237-267, 30p)
-%
-%* Dataflow Analysis (387-415, 28p)
-%
-%* Loop Optimizations (415-439, 24p)
-%
-%* Static Single Assignment Form (439-481, 42p)
+%*   Translation To Intermediate Code (153-179, 26p)
+%*   Basic Blocks And Traces (179-193, 14p)
+%*   Instruction Selection (193-219, 26p)
+%*   Liveness Analysis (219-237, 18p)
+%*   Register Allocation (237-267, 30p)
+%*   Dataflow Analysis (387-415, 28p)
+%*   Loop Optimizations (415-439, 24p)
+%*   Static Single Assignment Form (439-481, 42p)
 %
 %*using IR when only translating from one language to another:
 %
 %>Even when only one front end and one back end are being built, a good IR can modularize the task, so that the front end is not complicated with machine-specific details, and the back end is not bothered with information specific to one source language.
-    
 
-\section{Limited instruction set of \lstinline!LLVM--!}
+\section{\lstinline!LLVM--! instruction set}
 
 The intermediate representation emitted by the frontend of a compiler serves as a stepping stone independent of the target architecture. The \lstinline!LLVM! infrastructure is the industry standard in terms of bridging this gap and was consequently the library used to translate the semantically annotated abstract syntax tree to executable machine code in the 2022 compilers course. As this project is an expansion on this, it follows naturally to build on this. 
 
-The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as neither of the languages implemented support exception handling, floating point operations and so on, and instead only strive for a seemingly comfortanle middle ground.
+The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as, for instance, neither of the languages implemented support exception handling, floating point operations and so on, and instead only strive to cover the basics of compilers.
 
 The instructions included are
 \begin{enumerate}
-    \item binary operations of \lstinline!add!, \lstinline!and!, \lstinline!ashr!, \lstinline!lshr!, \lstinline!mul!, \lstinline!or!, \lstinline!sdiv!, \lstinline!srem!, \lstinline!shl!, \lstinline!sub! and \lstinline!xor!
-    \item logic/arithmetic comparison of \lstinline!icmp! (conditions being \lstinline!eq!, \lstinline!ne!, \lstinline!sge!, \lstinline!sgt!, \lstinline!sle! and \lstinline!slt!)
-    \item memory/address operations of \lstinline!alloca!, \lstinline!gep!, \lstinline!load! and \lstinline!store!
-    \item trivial/non-trivial \lstinline!mov! operations \lstinline!gep!, \lstinline!phi!, \lstinline!ptrtoint! and \lstinline!zext!
-    \item control flow operations of \lstinline!call!
+    \item binary operations \lstinline!add!, \lstinline!and!, \lstinline!ashr!, \lstinline!lshr!, \lstinline!mul!, \lstinline!or!, \lstinline!sdiv!, \lstinline!srem!, \lstinline!shl!, \lstinline!sub! and \lstinline!xor!
+    \item integer comparison \lstinline!icmp! (conditions being \lstinline!eq!, \lstinline!ne!, \lstinline!sge!, \lstinline!sgt!, \lstinline!sle! and \lstinline!slt!)
+    \item memory/address operations \lstinline!alloca!, \lstinline!gep!, \lstinline!load! and \lstinline!store!
+    \item  \lstinline!mov! operations \lstinline!gep!, \lstinline!phi!, \lstinline!ptrtoint! and \lstinline!zext!
+    \item control flow operations \lstinline!br!, \lstinline!call! and \lstinline!ret!
+    \item a  nullary terminator \lstinline!unreachable!
 \end{enumerate}
-with only three possible block terminators 
-\begin{enumerate}
-    \item \lstinline!br! with an optional condition
-    \item \lstinline!ret!
-    \item \lstinline!unreachable!
-\end{enumerate}
+%with only four distinct block terminators 
+%\begin{enumerate}
+%    \item Unconditional \lstinline!br! followed by the label to branch to
+%    \item Conditional \lstinline!br!  followed by an \lstinline!i1! condition and two labels
+%    \item \lstinline!ret! followed by an optional return value
+%    \item \lstinline!unreachable!
+%\end{enumerate}
+The branching for most of these is trivial: after successful execution the flow of all but \lstinline!br!, \lstinline!ret! and \lstinline!unreachable! will unconditionally attempt to execute the next instruction in memory (i.e. increment the instruction pointer by instruction length).
 
+Because of this, these instructions are referred to as \textit{terminators}, as their purpose is to disrupt what had otherwise been a linear flow from the beginning of this continus sequence of instructions, henceforth referred to as a \textit{basic block}.
 
+\section{Control Flow Analysis}
 
-\section{LLVM -> CFG}
+For a given program, it's representation as linear sequence of instructions from the above set isn't immediately useful for liveness analysis. (FIXME: why not?)  hence a \textit{control flow graph} is derived from these. A terminator will branch elsewhere to continue execution. The destination of this has to be an annotated by a label, hence labels \textit{initiate} blocks.
+
+With an input stream of instructions 
 
 %* description of blocks, how they connect etc.
 
-\section{CFG -> INTERF}
+Each function defined in an LLVM program is constructed with the help of
+
+\section{Liveness Analysis}
+
+
+%\section{CFG -> INTERF}
 
 %* describe the dataflow algorithm from the book
-%
 %* describe the interference criteria from the book
 
-\section{INTERF -> DOT}
+%\section{INTERF -> DOT}
 
 %* ez ???
 
-\section{INTERF -> DOT/Assignment}
+%\section{INTERF -> DOT/Assignment}
 
 %* list of methods for coalescing/allocating:
-%
-%    * ocamlgraph builtin
-%
-%    * greedy 
-%
-%    * briggs
-%
-%    * george
-%
-%    * welsh-powell?
+%   * ocamlgraph builtin
+%   * greedy 
+%   * briggs
+%   * george
+%   * welsh-powell?
+\section{Graph Coloring}
+The graph coloring by simplification as described by Appel 
 
-\section{Naive Codegen}
+%% TODO
+%* optimistic coloring
 
-%* safest possible x86 translation
-%
-%    * moving sys-v abi arguments to assigned registers is treacherous
 
-\section{Linear scan approach}
+\section{Linear Scan}
 
 %Live ranges for each of the temporaries are derived by visiting each instruction of each control flow block and examining its \textit{uses} and \textit{defs}.
 
-\section{Benchmarking}
+\section{Codegen}
+
+%* safest possible x86 translation
+%
+    %* moving sys-v abi arguments to assigned registers is treacherous
+
+\section{Optimization}
+
+% TODO: quote computability theory infinitely many optimizations
+
+
+\section{Evaluation}
+
+Relevant metrics by which to compare these variations are naturally the performance of the code generated at runtime, but also the time efficiency at compile-time. While the code written isn't expected to outperform LLVM, due to the time complexity of the linear scan and simplification algorithms implemented their respective runtime performances are expected to outperform the builtin graph coloring algorithm.
+
+% TODO: cpu cycles
+
+Another factor worth considering would be memory usage, caches misses, garbage collection (although not relevant to this as it doesn't use GC), vectorizatiion (loop optimizations by SIMD) etc.
+
+\subsection{Benchmarking}
+
 Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{AM1}) despite the target instruction set being x86-64. This is possible because of Rosetta 2, which  translates x86-64 to ARMv8 before execution \cite{A2012}.  Time is measured using the \lstinline!time! function of the bash shell as it is native to the chosen Docker image.  As all execution relevant to the performance of register allocation is done in user mode, only the \lstinline!user! metric is noted.
 
 %* fib
 %* ack
 %* \lstinline!/usr/bin/time -al! counts cpu cycles
 
-
-\section{Evaluation}
 %Benchmarks are performed in the environment described by the Dockerfile in the repository and executed on an Apple Silicon/M1 chip. Time is measured using the \lstinline!time! function of the bash shell as it is native to the chosen Docker image.  As all execution relevant to the performance of register allocation is done in user mode, only the \lstinline!user! metric is noted.
-
 
 %TODO:
 %
@@ -201,21 +252,28 @@ Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{AM1}) de
 %* how do I measure cpu cycles?
 
 
-\section{Comparison to other work and ideas for future work}
+\subsection{Comparison to other work and ideas for future work}
 
 
 \section{Conclusion}
 
 
-%\quickcharcount{main}
 
 %\defbibnote{myprenote}{This thesis is based on the following original publications:}
 %\printbibliography[prenote=myprenote,title={References}]
-\printbibliography[title={References}]
+%\printbibliography[title={References}]
+
+\printbibliography 
+
 
 \appendix
 
 \newpage
+
+%%% NOTE: Don't include subsections of tthe benchmarks section
+\addtocontents{toc}{\protect\setcounter{tocdepth}{1}}
+
+
 \section{Benchmarks}
 
 \subsection{\lstinline!benches/fib.ll!}
