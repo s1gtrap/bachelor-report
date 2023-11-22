@@ -6,8 +6,11 @@
 %\AtEveryBibitem{\printfield{note}\clearfield{note}\item}
 
 
+\usepackage{amsmath}
 \usepackage{tikz}
 \usetikzlibrary{chains}
+\usetikzlibrary{angles, quotes}
+\usetikzlibrary{decorations.pathreplacing}
 \usepackage{graphicx} % Required for inserting images
 \usepackage[T1]{fontenc}
 \usepackage{beramono}
@@ -96,13 +99,56 @@
 
 \section{Introduction}
 
-Compilers can be divided into several distinct phases, with the two halfs of which colloquially referred to as the \textit{frontend} and \textit{backend} stages. With the former serving the purpose of translating a high-level programming language to an \textit{intermediate representation} (IR) layer and the latter translating said IR to executable machine code on a target platform.
+Compilation refers to the process of translating from one language to another, most often from a programming language intended for humans to work with, to machine-/bytecode intended to be executed on a target platform. This process can be divided into several distinct phases, which are grouped into one of two stages, colloquially referred to as the \textit{frontend} and \textit{backend}. The former translating a high-level programming language to an \textit{intermediate representation} (IR) layer and the latter translating IR to executable machine code on a target platform (e.g. x86, ARM) or bytecode for a target VM (e.g. JVM, CLR).
+
+
 
 \begin{figure}[h]
   \centering
-\includegraphics[width=0.8\textwidth]{phases.png}
-\caption{Compiler phases}
+  \resizebox{0.8\textwidth}{!}{
+\begin{tikzpicture}
+  \tikzset{
+box/.style={draw,
+  inner sep=0.3cm,
+    minimum height=1.75cm,
+    align=center},
+}
+
+
+  % Nodes
+  \node [box, left, align=center] (incg) at (0,2.25) {Intermediate\\Codegen};
+  \node [box, left=0.7 of incg, align=center] (semant) {Semantic\\Analysis};
+  \node [box, left=0.7 of semant, align=center] (parse) {Parser};
+  \node [box, left=0.7 of parse, align=center] (lex) {Lexical\\Analysis};
+  \node [ left=0.9 of lex, align=center] (entry) {};
+  \node [box, left, align=center] (cfa) at (0,0) {Control-\\Flow\\Analysis};
+  \node [box, left=0.7 of cfa, align=center] (lva)  {Liveness/\\Dataflow\\Analysis};
+  \node [box, left=0.7 of lva, align=center] (alloc)  {Register\\Allocation};
+  \node [box, left=0.7 of alloc, align=center] (x86)  {Instruction\\Selection};
+  \node [ left=0.70 of x86, align=center] (exit) {};
+
+  % Edge with right-angle corners
+  \draw [-latex] (entry.east) -- (lex.west)  node [near start,pos=0.325,rotate=90,fill=white,opacity=0.9] {\small Source};
+  \draw [-latex] (lex.east) -- (parse.west)  node [midway,pos=0.4,rotate=90,fill=white,opacity=0.9] {\small Tokens};
+  \draw [-latex] (parse.east) -- (semant.west)  node [midway,pos=0.4,rotate=90,fill=white,opacity=0.9] {\small AST};
+  \draw [-latex] (semant.east) -- (incg.west)  node [midway,pos=0.4,rotate=90,fill=white,opacity=0.9] {\small \(t\)-AST};
+  \draw [-latex] (incg.east) -- +(0.4,0) |- node[pos=0.25,fill=white,opacity=0.9] {IR} (cfa.east);
+  \draw [-latex] (cfa.west) -- (lva.east)  node [midway,pos=0.4,rotate=-90,fill=white,opacity=0.9] {\small Flow Graph};
+  \draw [-latex] (lva.west) -- (alloc.east)  node [midway,pos=0.4,rotate=-90,fill=white,opacity=0.9] {\small Int. Graph};
+  \draw [-latex] (alloc.west) -- (x86.east)  node [midway,pos=0.4,rotate=-90,fill=white,opacity=0.9] {\small Reg. Asn.};
+  \draw [-latex] (x86.west) -- (exit.east)  node [midway,pos=0.4,rotate=-90,fill=white,opacity=0.9] {\small x86};
+
+  % backend outline
+  \fill [opacity=0.1] ([shift={(-0.15,-0.15)}]x86.south west) rectangle ([shift={(0.8,0.15)}]cfa.north east);
+
+  \draw [decorate,decoration={brace,amplitude=5pt,mirror,raise=4ex}]
+    (0.3,-1) -- (0.3,1) node[midway,xshift=3em,rotate=-90]{Backend};
+  \draw [decorate,decoration={brace,amplitude=5pt,mirror,raise=4ex}]
+    (0.3,1.25) -- (0.3,3.25) node[midway,xshift=3em,rotate=-90]{Frontend};
+\end{tikzpicture}}
+\caption{Compiler phases, backend highlighted}
 \end{figure}
+A critical part of the backend stage is assigning each variable (also referred to as \textit{virtual}) of the source program to a physical register on the target processor.
 
 
 %* overfladisk intro til hvad helvede register allokering er og hvorfor
@@ -113,13 +159,55 @@ Compilers can be divided into several distinct phases, with the two halfs of whi
 %snak om hvorfor jeg valgte llvm/ssa frem for x86 til global register llocation
 
 
-\section{Review of literature}
+\section{Review of Literature}
 
-Write about Appel book.
+The two primary sources are the Tiger- \cite{AppelAndrewW} and Dragonbook \cite{alma99122774374105763}, in addition to scientific publications concerning the linear scan approach.
 
-Write about SSA form liveness analysis. 
+\subsection{Control Flow Analysis}
 
-Keywords: program points, dataflow equations, fixed point
+The backend of a compiler takes some form of IR as input, usually a linear sequence of instructions for each separate function. This representation is close to the level of an actual processor by design, but it isn't immediately useful for the further analysis steps needed to generate optimized code for the target architecture. %%(FIXME: why not?)
+The control flow of a given program refers to the order in which instructions are executed. While the flow of most instructions is linear, in the sense that the next instruction to be executed is located immediately after, some send the execution elsewhere or outright terminate it. %% FIXME: why is this important?
+
+These instructions are referred to as \textit{terminators}, as they potentially terminate a contiguous flow of execution. This subset of instructions can be further divided into \textit{branch instructions} and those concerned with handling the callstack in function/subroutine management.
+
+These so-called \textit{branch instructions} that alter the flow of execution are further c
+
+
+
+
+
+
+
+
+hence a \textit{control flow graph} is derived from these. A terminator will branch elsewhere to continue execution. The destination of this has to be an annotated by a label, hence labels \textit{initiate} blocks.
+
+\subsection{Liveness Analysis}
+
+Liveness analysis is the process of finding the program points at which a variable is live. This serves the function of determining which variables are live simultaneously, i.e. in interference/conflict with one another, so cannot be assigned the same physical register without overwriting the value of one another in execution. These can be derived recursively by iteratively applying so-called \textit{dataflow equations} to each node in a \textit{control-flow graph} (CFG) until a stable state/fixed point is reached.
+
+The algorithm described in \cite{AppelAndrewW} and \cite{alma99122774374105763} is based on the following equations for the live-in and live-out variables respectively:
+\begin{align}
+  in\left[n\right] &= use\left[n\right] \cup (out\left[n\right] - def\left[n\right])\\
+  out\left[n\right] &= \bigcup_{s\in succ\left[n\right]} in\left[s\right]
+\end{align}
+where \(use\left[n\right]\) is the set of all dependent variables, \(def\left[n\right]\) is the set of all variables defines and \(succ\left[n\right]\) is the set of all immediate successor nodes of \(n\).
+
+The structure of the CFG is inherently vague as both  \cite{AppelAndrewW} and \cite{alma99122774374105763}, while based on the same unde
+
+rlying conceptions of dataflow, have different approaches to nodes of a CFG, with the former taking each individual instruction into consideration and the latter each basic block. Either of these approaches are sound 
+
+
+% TODO: try int set instead of symbols
+
+\subsection{Graph Coloring}
+
+\subsection{Linear Scan}
+
+%Write about Appel book.
+
+%Write about SSA form liveness analysis. 
+
+%Keywords: program points, dataflow equations, fixed point
 
 
 
@@ -157,14 +245,7 @@ The intermediate representation emitted by the frontend of a compiler serves as 
 The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as, for instance, neither of the languages implemented support exception handling, floating point operations and so on, and instead only strive to cover the basics of compilers.
 
 The instructions included are
-\begin{enumerate}
-    \item binary operations \lstinline!add!, \lstinline!and!, \lstinline!ashr!, \lstinline!lshr!, \lstinline!mul!, \lstinline!or!, \lstinline!sdiv!, \lstinline!srem!, \lstinline!shl!, \lstinline!sub! and \lstinline!xor!
-    \item integer comparison \lstinline!icmp! (conditions being \lstinline!eq!, \lstinline!ne!, \lstinline!sge!, \lstinline!sgt!, \lstinline!sle! and \lstinline!slt!)
-    \item memory/address operations \lstinline!alloca!, \lstinline!gep!, \lstinline!load! and \lstinline!store!
-    \item  \lstinline!mov! operations \lstinline!gep!, \lstinline!phi!, \lstinline!ptrtoint! and \lstinline!zext!
-    \item control flow operations \lstinline!br!, \lstinline!call! and \lstinline!ret!
-    \item a  nullary terminator \lstinline!unreachable!
-\end{enumerate}
+\lstinline!trunc! has only been added in order to help cover more generated LLVM.
 %with only four distinct block terminators 
 %\begin{enumerate}
 %    \item Unconditional \lstinline!br! followed by the label to branch to
@@ -178,7 +259,6 @@ Because of this, these instructions are referred to as \textit{terminators}, as 
 
 \section{Control Flow Analysis}
 
-For a given program, it's representation as linear sequence of instructions from the above set isn't immediately useful for liveness analysis. (FIXME: why not?)  hence a \textit{control flow graph} is derived from these. A terminator will branch elsewhere to continue execution. The destination of this has to be an annotated by a label, hence labels \textit{initiate} blocks.
 
 With an input stream of instructions 
 
@@ -187,6 +267,8 @@ With an input stream of instructions
 Each function defined in an LLVM program is constructed with the help of
 
 \section{Liveness Analysis}
+
+Dataflow analysis 
 
 
 %\section{CFG -> INTERF}
@@ -211,19 +293,20 @@ The graph coloring by simplification as described by Appel
 
 %% TODO
 %* optimistic coloring
+\subsection{Coalescing}
 
 
 \section{Linear Scan}
 
 %Live ranges for each of the temporaries are derived by visiting each instruction of each control flow block and examining its \textit{uses} and \textit{defs}.
 
-\section{Codegen}
+\section{Instruction Selection}
 
 %* safest possible x86 translation
 %
     %* moving sys-v abi arguments to assigned registers is treacherous
 
-\section{Optimization}
+\section{Further Optimization}
 
 % TODO: quote computability theory infinitely many optimizations
 
@@ -238,7 +321,7 @@ Another factor worth considering would be memory usage, caches misses, garbage c
 
 \subsection{Benchmarking}
 
-Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{AM1}) despite the target instruction set being x86-64. This is possible because of Rosetta 2, which  translates x86-64 to ARMv8 before execution \cite{A2012}.  Time is measured using the \lstinline!time! function of the bash shell as it is native to the chosen Docker image.  As all execution relevant to the performance of register allocation is done in user mode, only the \lstinline!user! metric is noted.
+Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{article}) despite the target instruction set being x86-64. This is possible because of Rosetta 2, which  translates x86-64 to ARMv8 before execution \cite{PolettoMassimiliano1999Lsra}.  Time is measured using the \lstinline!time! function of the bash shell as it is native to the chosen Docker image.  As all execution relevant to the performance of register allocation is done in user mode, only the \lstinline!user! metric is noted.
 
 %* fib
 %* ack
@@ -250,6 +333,23 @@ Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{AM1}) de
 %
 %* should I use shell time, or /usr/bin/time?
 %* how do I measure cpu cycles?
+\begin{center}
+\begin{tabular}{ c c c }
+ cell1 & cell2 & cell3 \\ 
+ cell4 & cell5 & cell6 \\  
+ cell7 & cell8 & cell9    
+\end{tabular}
+\end{center}
+
+\begin{center}
+\begin{tabular}{|c||c|c|c|c|} 
+ \hline
+ sha256 & -O0 & -O1 & -O2 & -O3 \\ [0.5ex] 
+ \hline
+ 1000000 & 1 & 0.73 & 0.73 & 0.73 \\ [1ex] 
+ \hline
+\end{tabular}
+\end{center}
 
 
 \subsection{Comparison to other work and ideas for future work}
@@ -273,6 +373,16 @@ Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{AM1}) de
 %%% NOTE: Don't include subsections of tthe benchmarks section
 \addtocontents{toc}{\protect\setcounter{tocdepth}{1}}
 
+\section{LLVM-- instruction set}
+\label{appendix:llvmis}
+\begin{enumerate}
+    \item binary operations \lstinline!add!, \lstinline!and!, \lstinline!ashr!, \lstinline!lshr!, \lstinline!mul!, \lstinline!or!, \lstinline!sdiv!, \lstinline!srem!, \lstinline!shl!, \lstinline!sub! and \lstinline!xor!
+    \item integer comparison \lstinline!icmp! (conditions being \lstinline!eq!, \lstinline!ne!, \lstinline!sge!, \lstinline!sgt!, \lstinline!sle! and \lstinline!slt!)
+    \item memory/address operations \lstinline!alloca!, \lstinline!gep!, \lstinline!load! and \lstinline!store!
+    \item  \lstinline!mov! operations \lstinline!gep!, \lstinline!phi!, \lstinline!ptrtoint!, \lstinline!trunc!, and \lstinline!zext!
+    \item control flow operations \lstinline!br!, \lstinline!call! and \lstinline!ret!
+    \item a  nullary terminator \lstinline!unreachable!
+\end{enumerate}
 
 \section{Benchmarks}
 
