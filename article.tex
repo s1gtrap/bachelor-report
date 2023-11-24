@@ -168,9 +168,11 @@ The two primary sources are the Tiger- \cite{AppelAndrewW} and Dragonbook \cite{
 The backend of a compiler takes some form of IR as input, usually a linear sequence of instructions for each separate function. This representation is close to the level of an actual processor by design, but it isn't immediately useful for the further analysis steps needed to generate optimized code for the target architecture. %%(FIXME: why not?)
 The control flow of a given program refers to the order in which instructions are executed. While the flow of most instructions is linear, in the sense that the next instruction to be executed is located immediately after, some send the execution elsewhere or outright terminate it. %% FIXME: why is this important?
 
+% mention basic block early on, they're a contiguous sequence of instructions that do not transfer control flow
+
 These instructions are referred to as \textit{terminators}, as they potentially terminate a contiguous flow of execution. This subset of instructions can be further divided into \textit{branch instructions} and those concerned with handling the callstack in function/subroutine management.
 
-These so-called \textit{branch instructions} that alter the flow of execution are further c
+%These so-called \textit{branch instructions} that alter the flow of execution are further c
 
 
 
@@ -183,18 +185,17 @@ hence a \textit{control flow graph} is derived from these. A terminator will bra
 
 \subsection{Liveness Analysis}
 
-Liveness analysis is the process of finding the program points at which a variable is live. This serves the function of determining which variables are live simultaneously, i.e. in interference/conflict with one another, so cannot be assigned the same physical register without overwriting the value of one another in execution. These can be derived recursively by iteratively applying so-called \textit{dataflow equations} to each node in a \textit{control-flow graph} (CFG) until a stable state/fixed point is reached.
+Liveness analysis is the process of finding the program points at which a variable is live. This serves the function of determining which variables are live simultaneously, i.e. in interference/conflict with one another, which cannot be assigned the same physical register without overwriting the value of one another in execution. These can be derived recursively by iteratively applying so-called \textit{dataflow equations} to each node in a \textit{control-flow graph} (CFG) until a stable state/fixed point is reached.
 
 The algorithm described in \cite{AppelAndrewW} and \cite{alma99122774374105763} is based on the following equations for the live-in and live-out variables respectively:
 \begin{align}
-  in\left[n\right] &= use\left[n\right] \cup (out\left[n\right] - def\left[n\right])\\
-  out\left[n\right] &= \bigcup_{s\in succ\left[n\right]} in\left[s\right]
+  in\left[n\right] &= use\left[n\right] \cup (out\left[n\right] - \mathit{def}\left[n\right])\\
+  out\left[n\right] &= \bigcup_{s\in \mathit{succ}\left[n\right]} in\left[s\right]
 \end{align}
 where \(use\left[n\right]\) is the set of all dependent variables, \(def\left[n\right]\) is the set of all variables defines and \(succ\left[n\right]\) is the set of all immediate successor nodes of \(n\).
 
-The structure of the CFG is inherently vague as both  \cite{AppelAndrewW} and \cite{alma99122774374105763}, while based on the same unde
-
-rlying conceptions of dataflow, have different approaches to nodes of a CFG, with the former taking each individual instruction into consideration and the latter each basic block. Either of these approaches are sound 
+The structure of the CFG is inherently vague as both  \textit{Modern Compiler Implementation in ML} \cite{AppelAndrewW} and \textit{Compilers : Principles, Techniques, and Tools} \cite{alma99122774374105763}, while based on the same underlying % TODO: fix references
+conceptions of dataflow, have different approaches to nodes of a CFG, with the former taking each individual instruction into consideration and the latter each basic block. Either of these approaches are sound 
 
 
 % TODO: try int set instead of symbols
@@ -301,6 +302,23 @@ The graph coloring by simplification as described by Appel
 %Live ranges for each of the temporaries are derived by visiting each instruction of each control flow block and examining its \textit{uses} and \textit{defs}.
 
 \section{Instruction Selection}
+
+Translating each IR instruction to x86 correctly is a matter of eliminating unintended side-effects. Each LLVM-- instruction is defined to have only one purpose, %% FIXME is purpose the right word?
+as concepts such as calling conventions, stack frames, or a \lstinline!FLAGS! register are completely abstracted over in order to remain platform independent.
+
+In contrast, the x86 \textit{instruction set architecture} (ISA) is targeting a  \textit{complex instruction set computer} (CISC) family of processors, the instructions of which perform a much broader set of operations \cite[p.~190]{AppelAndrewW}. This is is in part due to pipelining, i.e. an abstraction over the concrete implementation of the actual processor, which in turn is made for the sake of performance.
+
+An example of this would be the division/remainder operation: since integer division is a non-trivial iterative process wherein both the quotient and remainder is needed throughout, the result of both of these is stored in the \lstinline!%rax! and \lstinline!%rdx! registers respectively. This means two operations are performed simultaneously regardless of which value is used, hence they need to be restored before executing the next instruction, as any variables assigned to \lstinline!%rax! or \lstinline!%rdx! will be overwritten.
+
+\begin{center}
+\begin{tabular}{|c||c|c|c|c|} 
+ \hline
+ sha256 & -O0 & -O1 & -O2 & -O3 \\ [0.5ex] 
+ \hline
+ 1000000 & 1 & 0.73 & 0.73 & 0.73 \\ [1ex] 
+ \hline
+\end{tabular}
+\end{center}
 
 %* safest possible x86 translation
 %
