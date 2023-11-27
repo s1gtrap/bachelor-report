@@ -154,7 +154,7 @@ This can largely be attributed to performance, as register machines routinely ou
 Because of the limited amount of GPRs available simultaneously, a crucial part of the backend stage for an optimizing compiler is assigning each variable  of the source program to a GPR in such a way that maximizes performance without sacrificing correctness.
 
 The process of assigning each variable to a GPR is referred to as \textit{register allocation}, and can be approached in several different ways. This paper will seek to implement graph coloring and linear scan and evaluate them in terms of runtime performance after compilation. %% TODO: compare with time-complexity/compile-time duration?
-The primary sources will be \textit{Modern Compiler Implementation in ML} \parencite{AppelAndrewW} and \textit{Compilers: Principles, techniques, and tools} by \parencite{alma99122774374105763}, in addition to scientific publications concerning the linear scan approach.
+The primary sources will be \textit{Modern Compiler Implementation in ML} \parencite{tiger} and \textit{Compilers: Principles, techniques, and tools} \parencite{dragon}, in addition to publications concerning the linear scan approach.
 
 
 %* overfladisk intro til hvad helvede register allokering er og hvorfor
@@ -167,7 +167,7 @@ The primary sources will be \textit{Modern Compiler Implementation in ML} \paren
 
 \section{Review of Literature}
 
-The two primary sources are the \textit{Modern Compiler Implementation in ML} \cite{AppelAndrewW} and Dragonbook \cite{alma99122774374105763}, in addition to scientific publications concerning the linear scan approach.
+The two primary sources are the \textit{Modern Compiler Implementation in ML} \cite{tiger} and Dragonbook \cite{dragon}, in addition to scientific publications concerning the linear scan approach.
 
 \subsection{Control Flow Analysis}
 
@@ -193,14 +193,14 @@ hence a \textit{control flow graph} is derived from these. A terminator will bra
 
 Liveness analysis is the process of finding the program points at which a variable is live. This serves the function of determining which variables are live simultaneously, i.e. in interference/conflict with one another, which cannot be assigned the same physical register without overwriting the value of one another in execution. These can be derived recursively by iteratively applying so-called \textit{dataflow equations} to each node in a \textit{control-flow graph} (CFG) until a stable state/fixed point is reached.
 
-The algorithm described in \textit{Modern Compiler Implementation in ML} \cite{AppelAndrewW} and \cite{alma99122774374105763} is based on the following equations for the live-in and live-out variables respectively:
+The algorithm described in \textit{Modern Compiler Implementation in ML} \cite{tiger} and \cite{dragon} is based on the following equations for the live-in and live-out variables respectively:
 \begin{align}
   in\left[n\right] &= use\left[n\right] \cup (out\left[n\right] - \mathit{def}\left[n\right])\\
   out\left[n\right] &= \bigcup_{s\in \mathit{succ}\left[n\right]} in\left[s\right]
 \end{align}
 where \(use\left[n\right]\) is the set of all dependent variables, \(def\left[n\right]\) is the set of all variables defines and \(succ\left[n\right]\) is the set of all immediate successor nodes of \(n\).
 
-The structure of the CFG is inherently vague as both   \cite{AppelAndrewW} and \textit{Compilers : Principles, Techniques, and Tools} \cite{alma99122774374105763}, while based on the same underlying % TODO: fix references
+The structure of the CFG is inherently vague as both   \cite{tiger} and \textit{Compilers : Principles, Techniques, and Tools} \cite{dragon}, while based on the same underlying % TODO: fix references
 conceptions of dataflow, have different approaches to nodes of a CFG, with the former taking each individual instruction into consideration and the latter each basic block. Either of these approaches are sound 
 
 
@@ -312,7 +312,7 @@ The graph coloring by simplification as described by Appel
 Translating each IR instruction to x86 correctly is a matter of eliminating unintended side-effects. Each LLVM-- instruction is defined to have only one purpose, %% FIXME is purpose the right word?
 as concepts such as calling conventions, stack frames, or a \lstinline!FLAGS! register are completely abstracted over in order to remain platform independent.
 
-In contrast, the x86 \textit{instruction set architecture} (ISA) is targeting a  \textit{complex instruction set computer} (CISC) family of processors, the instructions of which perform a much broader set of operations \cite[p.~190]{AppelAndrewW}. This is is in part due to pipelining, i.e. an abstraction over the concrete implementation of the actual processor, which in turn is made for the sake of performance.
+In contrast, the x86 \textit{instruction set architecture} (ISA) is targeting a  \textit{complex instruction set computer} (CISC) family of processors, the instructions of which perform a much broader set of operations \cite[p.~190]{tiger}. This is is in part due to pipelining, i.e. an abstraction over the concrete implementation of the actual processor, which in turn is made for the sake of performance.
 
 An example of this would be the division/remainder operation: since integer division is a non-trivial iterative process wherein both the quotient and remainder is needed throughout, the result of both of these is stored in the \lstinline!%rax! and \lstinline!%rdx! registers respectively. This means two operations are performed simultaneously regardless of which value is used, hence they need to be restored before executing the next instruction, as any variables assigned to \lstinline!%rax! or \lstinline!%rdx! will be overwritten.
 
