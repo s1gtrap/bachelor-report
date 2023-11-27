@@ -161,7 +161,7 @@ A critical part of the backend stage is assigning each variable (also referred t
 
 \section{Review of Literature}
 
-The two primary sources are the Tiger- \cite{AppelAndrewW} and Dragonbook \cite{alma99122774374105763}, in addition to scientific publications concerning the linear scan approach.
+The two primary sources are the \textit{Modern Compiler Implementation in ML} \cite{AppelAndrewW} and Dragonbook \cite{alma99122774374105763}, in addition to scientific publications concerning the linear scan approach.
 
 \subsection{Control Flow Analysis}
 
@@ -187,14 +187,14 @@ hence a \textit{control flow graph} is derived from these. A terminator will bra
 
 Liveness analysis is the process of finding the program points at which a variable is live. This serves the function of determining which variables are live simultaneously, i.e. in interference/conflict with one another, which cannot be assigned the same physical register without overwriting the value of one another in execution. These can be derived recursively by iteratively applying so-called \textit{dataflow equations} to each node in a \textit{control-flow graph} (CFG) until a stable state/fixed point is reached.
 
-The algorithm described in \cite{AppelAndrewW} and \cite{alma99122774374105763} is based on the following equations for the live-in and live-out variables respectively:
+The algorithm described in \textit{Modern Compiler Implementation in ML} \cite{AppelAndrewW} and \cite{alma99122774374105763} is based on the following equations for the live-in and live-out variables respectively:
 \begin{align}
   in\left[n\right] &= use\left[n\right] \cup (out\left[n\right] - \mathit{def}\left[n\right])\\
   out\left[n\right] &= \bigcup_{s\in \mathit{succ}\left[n\right]} in\left[s\right]
 \end{align}
 where \(use\left[n\right]\) is the set of all dependent variables, \(def\left[n\right]\) is the set of all variables defines and \(succ\left[n\right]\) is the set of all immediate successor nodes of \(n\).
 
-The structure of the CFG is inherently vague as both  \textit{Modern Compiler Implementation in ML} \cite{AppelAndrewW} and \textit{Compilers : Principles, Techniques, and Tools} \cite{alma99122774374105763}, while based on the same underlying % TODO: fix references
+The structure of the CFG is inherently vague as both   \cite{AppelAndrewW} and \textit{Compilers : Principles, Techniques, and Tools} \cite{alma99122774374105763}, while based on the same underlying % TODO: fix references
 conceptions of dataflow, have different approaches to nodes of a CFG, with the former taking each individual instruction into consideration and the latter each basic block. Either of these approaches are sound 
 
 
@@ -313,9 +313,16 @@ An example of this would be the division/remainder operation: since integer divi
 \begin{center}
 \begin{tabular}{|c||c|c|c|c|} 
  \hline
- sha256 & -O0 & -O1 & -O2 & -O3 \\ [0.5ex] 
+ add & addx & \{\}\\
  \hline
- 1000000 & 1 & 0.73 & 0.73 & 0.73 \\ [1ex] 
+ mul & imul & \{ \%rax \} \\
+ \hline
+ sdiv & idivx & \{\%rax, \%rdx\} \\
+ \hline
+ srem & idivx & \{\%rax, \%rdx \\
+ \hline
+   call & callx & \{\%rax, \textit{caller saved registers}\} \\
+ \hline
  \hline
 \end{tabular}
 \end{center}
@@ -362,7 +369,25 @@ Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{article}
 \begin{center}
 \begin{tabular}{|c||c|c|c|c|} 
  \hline
- sha256 & -O0 & -O1 & -O2 & -O3 \\ [0.5ex] 
+ fib & clang & greedy & briggs & linear \\ [0.5ex] 
+ \hline
+ 40 & 1.000000 & 1.438693 & 1.441270 & 0.73 \\ [1ex] 
+ 41 & 1.000000 & 1.441035 & 1.440626 & 0.73 \\ [1ex] 
+ \hline
+\end{tabular}
+\end{center}
+
+ 
+
+
+bench clang	benches/fib.ll 42 	min=5494929992 (1.000000)	avg=5545852373 (1.000000)	max=5669289413
+bench greedy	benches/fib.ll 42 	min=7951933724 (1.447140)	avg=7969947833 (1.437101)	max=8004638438
+bench briggs	benches/fib.ll 42 	min=7946186345 (1.446094)
+
+\begin{center}
+\begin{tabular}{|c||c|c|c|c|} 
+ \hline
+ sha256 & clang & greedy & briggs & linear \\ [0.5ex] 
  \hline
  1000000 & 1 & 0.73 & 0.73 & 0.73 \\ [1ex] 
  \hline
