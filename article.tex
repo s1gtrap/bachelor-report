@@ -1,5 +1,5 @@
 \documentclass{article}
-\usepackage[style=ieee]{biblatex}
+\usepackage[style=apa]{biblatex}
 
 
 \addbibresource{\jobname.bib}
@@ -148,12 +148,13 @@ box/.style={draw,
 \end{tikzpicture}}
 \caption{Compiler phases, backend highlighted}
 \end{figure}
-Most operations of a general-purpose programming language are translated to a set of logic,  control, and arithmetic processor instructions, that are intended to be executed sequentially on a computer processor: a single circuit/chip, referred to as the \textit{central processing unit} (CPU). CPU design varies and has evolved over time, but most processors executing logic operations are \textit{register machines}, in that they use a limited set of \textit{general-purpose registers} (GPRs) to store working values in combination with \textit{random access memory} (RAM) for mid-term and other I/O peripherals for long-term storage.
+Most operations of a general-purpose programming language are translated to a set of logic,  control, and arithmetic instructions that are intended to be executed sequentially on a computer processor: a single circuit/chip, referred to as the \textit{central processing unit} (CPU). CPU design varies and has evolved over time, but most processors executing logic operations are \textit{register machines}, in that they use a limited set of \textit{general-purpose registers} (GPRs) to store working values in combination with \textit{random access memory} (RAM) for mid-term and other I/O peripherals for long-term storage.
 
-The reason for this can largely be attributed to performance, as register machines routinely outperform so-called stack machines \cite{ShiYunhe2008VmsS} that are often used in VMs.
-Due to this, and the limited amount of GPRs available, a crucial part of the backend stage for an optimizing compiler is assigning each variable  of the source program to a GPR in such a way that maximizes performance without sacrificing correctness.
+This can largely be attributed to performance, as register machines routinely outperform so-called \textit{stack machines} \parencite{ShiYunhe2008VmsS} that are often used in VMs.
+Because of the limited amount of GPRs available simultaneously, a crucial part of the backend stage for an optimizing compiler is assigning each variable  of the source program to a GPR in such a way that maximizes performance without sacrificing correctness.
 
-The process of assigning each variable to a GPR is generally referred to as \textit{register allocation}, and 
+The process of assigning each variable to a GPR is referred to as \textit{register allocation}, and can be approached in several different ways. This paper will seek to implement graph coloring and linear scan and evaluate them in terms of runtime performance after compilation. %% TODO: compare with time-complexity/compile-time duration?
+The primary sources will be \textit{Modern Compiler Implementation in ML} \parencite{AppelAndrewW} and \textit{Compilers: Principles, techniques, and tools} by \parencite{alma99122774374105763}, in addition to scientific publications concerning the linear scan approach.
 
 
 %* overfladisk intro til hvad helvede register allokering er og hvorfor
