@@ -425,12 +425,12 @@ bench briggs	benches/fib.ll 42 	min=7946186345 (1.446094)
 \section{LLVM-- instruction set}
 \label{appendix:llvmis}
 \begin{enumerate}
-    \item binary operations \lstinline!add!, \lstinline!and!, \lstinline!ashr!, \lstinline!lshr!, \lstinline!mul!, \lstinline!or!, \lstinline!sdiv!, \lstinline!srem!, \lstinline!shl!, \lstinline!sub! and \lstinline!xor!
+    \item binary operations \lstinline!add!, \lstinline!and!, \lstinline!ashr!, \lstinline!lshr!, \lstinline!mul!, \lstinline!or!, \lstinline!sdiv!,\\\lstinline!srem!, \lstinline!shl!, \lstinline!sub! and \lstinline!xor!
     \item integer comparison \lstinline!icmp! (conditions being \lstinline!eq!, \lstinline!ne!, \lstinline!sge!, \lstinline!sgt!, \lstinline!sle! and \lstinline!slt!)
     \item memory/address operations \lstinline!alloca!, \lstinline!gep!, \lstinline!load! and \lstinline!store!
     \item  \lstinline!mov! operations \lstinline!gep!, \lstinline!phi!, \lstinline!ptrtoint!, \lstinline!trunc!, and \lstinline!zext!
     \item control flow operations \lstinline!br!, \lstinline!call! and \lstinline!ret!
-    \item a  nullary terminator \lstinline!unreachable!
+    \item a  nullary block terminator \lstinline!unreachable!
 \end{enumerate}
 
 \section{Benchmarks}
