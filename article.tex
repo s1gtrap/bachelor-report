@@ -99,7 +99,7 @@
 
 \section{Introduction}
 
-Compilation refers to the process of translating from one language to another, most often from a programming language intended for humans to work with, to machine-/bytecode intended to be executed on a target platform. This process can be divided into several distinct phases, which are grouped into one of two stages, colloquially referred to as the \textit{frontend} and \textit{backend}. The former translating a high-level programming language to an \textit{intermediate representation} (IR) layer and the latter translating IR to executable machine code on a target platform (e.g. x86, ARM) or bytecode for a target VM (e.g. JVM, CLR).
+Compilation refers to the process of translating from one language to another, most often from a high-level programming language intended for humans to work with, to machine- or bytecode intended to be executed on a target platform. This process can be divided into several distinct phases, which are grouped into one of two stages colloquially referred to as the \textit{frontend} and \textit{backend}. The former translating a high-level programming language to an \textit{intermediate representation} (IR) layer and the latter translating IR to executable machine code on a target platform or bytecode for a target \textit{virtual machine} (VM).
 
 
 
@@ -148,7 +148,12 @@ box/.style={draw,
 \end{tikzpicture}}
 \caption{Compiler phases, backend highlighted}
 \end{figure}
-A critical part of the backend stage is assigning each variable (also referred to as \textit{virtual}) of the source program to a physical register on the target processor.
+Most operations of a general-purpose programming language are translated to a set of logic,  control, and arithmetic processor instructions, that are intended to be executed sequentially on a computer processor: a single circuit/chip, referred to as the \textit{central processing unit} (CPU). CPU design varies and has evolved over time, but most processors executing logic operations are \textit{register machines}, in that they use a limited set of \textit{general-purpose registers} (GPRs) to store working values in combination with \textit{random access memory} (RAM) for mid-term and other I/O peripherals for long-term storage.
+
+The reason for this can largely be attributed to performance, as register machines routinely outperform so-called stack machines \cite{ShiYunhe2008VmsS} that are often used in VMs.
+Due to this, and the limited amount of GPRs available, a crucial part of the backend stage for an optimizing compiler is assigning each variable  of the source program to a GPR in such a way that maximizes performance without sacrificing correctness.
+
+The process of assigning each variable to a GPR is generally referred to as \textit{register allocation}, and 
 
 
 %* overfladisk intro til hvad helvede register allokering er og hvorfor
