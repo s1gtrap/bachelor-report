@@ -176,6 +176,8 @@ The control flow of a given program refers to the order in which instructions ar
 
 % mention basic block early on, they're a contiguous sequence of instructions that do not transfer control flow
 
+These contiguous sequences of instructions are referred to as \textit{basic blocks}: a basic block is defined as a sequence of instructions with no branches in or out except for the first and last instructions, and can be collectively construed of as a node in a control flow graph, whose directed entry edges are from any block that directs control flow towards itself.
+
 These instructions are referred to as \textit{terminators}, as they potentially terminate a contiguous flow of execution. This subset of instructions can be further divided into \textit{branch instructions} and those concerned with handling the callstack in function/subroutine management.
 
 %These so-called \textit{branch instructions} that alter the flow of execution are further c
