@@ -17,9 +17,9 @@
 \usepackage{courier}
 \usepackage{listings}
 \usepackage{xpatch}
-\usepackage{xcolor}
 \usepackage{realboxes}
 \usepackage{titlesec}
+\usepackage{xcolor}
 
 
 \setcounter{secnumdepth}{4}
@@ -35,7 +35,7 @@
   identifierstyle=
 }
 
-\definecolor{mygreen}{rgb}{0,0.6,0}
+\definecolor{mygreen}{rgb}{0,0.8,0}
 \definecolor{mygray}{rgb}{0.5,0.5,0.5}
 \definecolor{mymauve}{rgb}{0.58,0,0.82}
 \definecolor{mygray}{rgb}{0.94,0.94,0.94}
@@ -148,7 +148,7 @@ box/.style={draw,
 \end{tikzpicture}}
 \caption{Compiler phases, backend highlighted}
 \end{figure}
-Most operations of a general-purpose programming language are translated to a set of logic,  control, and arithmetic instructions that are intended to be executed sequentially on a computer processor: a single circuit/chip, referred to as the \textit{central processing unit} (CPU). CPU design varies and has evolved over time, but most processors executing logic operations are \textit{register machines}, in that they use a limited set of \textit{general-purpose registers} (GPRs) to store working values in combination with \textit{random access memory} (RAM) for mid-term and other I/O peripherals for long-term storage.
+Most operations of a general-purpose programming language are translated to a set of logic,  control, and arithmetic instructions to be executed sequentially on a computer processor: a single circuit/chip, referred to as the \textit{central processing unit} (CPU), the design of which has varied and evolved over time. Most processors executing logic operations are \textit{register machines}, in that they use a limited set of \textit{general-purpose registers} (GPRs) to store working values in combination with \textit{random access memory} (RAM) for mid-term, and other I/O peripherals for long-term storage.
 
 This can largely be attributed to performance, as register machines routinely outperform so-called \textit{stack machines} \parencite{ShiYunhe2008VmsS} that are often used in VMs.
 Because of the limited amount of GPRs available simultaneously, a crucial part of the backend stage for an optimizing compiler is assigning each variable  of the source program to a GPR in such a way that maximizes performance without sacrificing correctness.
@@ -172,11 +172,11 @@ The two primary sources are the \textit{Modern Compiler Implementation in ML} \c
 \subsection{Control Flow Analysis}
 
 The backend of a compiler takes some form of IR as input, usually a linear sequence of instructions for each separate function. This representation is close to the level of an actual processor by design, but it isn't immediately useful for the further analysis steps needed to generate optimized code for the target architecture. %%(FIXME: why not?)
-The control flow of a given program refers to the order in which instructions are executed. While the flow of most instructions is linear, in the sense that the next instruction to be executed is located immediately after, some send the execution elsewhere or outright terminate it. %% FIXME: why is this important?
+The control flow of a given program refers to the order in which instructions are executed. While the flow of most instructions is linear, in the sense that the next instruction to be executed is located immediately after, some transfer the flow of execution elsewhere or terminate it. %% FIXME: why is this important?
 
 % mention basic block early on, they're a contiguous sequence of instructions that do not transfer control flow
 
-These contiguous sequences of instructions are referred to as \textit{basic blocks}: a basic block is defined as a sequence of instructions with no branches in or out except for the first and last instructions, and can be collectively construed of as a node in a control flow graph, whose directed entry edges are from any block that directs control flow towards itself.
+Such contiguous sequences of instructions are referred to as \textit{basic blocks}: a basic block is defined as a sequence of instructions with no branches in or out except for the first and last instructions, and can be collectively construed of as a node in a control flow graph, whose directed entry edges are from any block that directs control flow towards itself.
 
 These instructions are referred to as \textit{terminators}, as they potentially terminate a contiguous flow of execution. This subset of instructions can be further divided into \textit{branch instructions} and those concerned with handling the callstack in function/subroutine management.
 
@@ -354,7 +354,10 @@ Another factor worth considering would be memory usage, caches misses, garbage c
 
 \subsection{Benchmarking}
 
-Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{article}) despite the target instruction set being x86-64. This is possible because of Rosetta 2, which  translates x86-64 to ARMv8 before execution \cite{PolettoMassimiliano1999Lsra}.  Time is measured using the \lstinline!time! function of the bash shell as it is native to the chosen Docker image.  As all execution relevant to the performance of register allocation is done in user mode, only the \lstinline!user! metric is noted.
+%Runtime performance of generated code can be measured 
+%Measuring the performance of a compiler backend involves assessing how well it translates high-level programming code into machine code, considering factors like execution speed and generated code size. Here are several methods to evaluate the performance of a given compiler:
+
+%Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{article}) despite the target instruction set being x86-64. This is possible because of Rosetta 2, which  translates x86-64 to ARMv8 before execution \cite{PolettoMassimiliano1999Lsra}.  Time is measured using the \lstinline!time! function of the bash shell as it is native to the chosen Docker image.  As all execution relevant to the performance of register allocation is done in user mode, only the \lstinline!user! metric is noted.
 
 %* fib
 %* ack
@@ -366,13 +369,13 @@ Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{article}
 %
 %* should I use shell time, or /usr/bin/time?
 %* how do I measure cpu cycles?
-\begin{center}
-\begin{tabular}{ c c c }
- cell1 & cell2 & cell3 \\ 
- cell4 & cell5 & cell6 \\  
- cell7 & cell8 & cell9    
-\end{tabular}
-\end{center}
+%\begin{center}
+%\begin{tabular}{ c c c }
+ %cell1 & cell2 & cell3 \\ 
+ %cell4 & cell5 & cell6 \\  
+ %cell7 & cell8 & cell9    
+%\end{tabular}
+%\end{center}
 
 \begin{center}
 \begin{tabular}{|c||c|c|c|c|} 
@@ -390,15 +393,15 @@ Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{article}
 
 
 
-\begin{center}
-\begin{tabular}{|c||c|c|c|c|} 
- \hline
- sha256 & clang & greedy & briggs & linear \\ [0.5ex] 
- \hline
- 1000000 & 1 & 0.73 & 0.73 & 0.73 \\ [1ex] 
- \hline
-\end{tabular}
-\end{center}
+%\begin{center}
+%\begin{tabular}{|c||c|c|c|c|} 
+ %\hline
+ %sha256 & clang & greedy & briggs & linear \\ [0.5ex] 
+ %\hline
+ %1000000 & 1 & 0.73 & 0.73 & 0.73 \\ [1ex] 
+ %\hline
+%\end{tabular}
+%\end{center}
 
 
 \subsection{Comparison to other work and ideas for future work}
