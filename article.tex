@@ -377,10 +377,11 @@ Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{article}
 \begin{center}
 \begin{tabular}{|c||c|c|c|c|} 
  \hline
- fib & clang & greedy & briggs & linear \\ [0.5ex] 
+ fib & clang & greedy & simple & linear \\ [0.5ex] 
  \hline
  40 & 1.000000 & 1.438693 & 1.441270 & 0.73 \\ [1ex] 
  41 & 1.000000 & 1.441035 & 1.440626 & 0.73 \\ [1ex] 
+ 42 & 	1.000000 & 1.447140 & 1.446094 & 0\\
  \hline
 \end{tabular}
 \end{center}
@@ -388,9 +389,6 @@ Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{article}
  
 
 
-bench clang	benches/fib.ll 42 	min=5494929992 (1.000000)	avg=5545852373 (1.000000)	max=5669289413
-bench greedy	benches/fib.ll 42 	min=7951933724 (1.447140)	avg=7969947833 (1.437101)	max=8004638438
-bench briggs	benches/fib.ll 42 	min=7946186345 (1.446094)
 
 \begin{center}
 \begin{tabular}{|c||c|c|c|c|} 
