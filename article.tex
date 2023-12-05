@@ -247,26 +247,13 @@ conceptions of dataflow, have different approaches to nodes of a CFG, with the f
 %
 %>Even when only one front end and one back end are being built, a good IR can modularize the task, so that the front end is not complicated with machine-specific details, and the back end is not bothered with information specific to one source language.
 
-\section{\lstinline!LLVM--! instruction set}
-
-The intermediate representation emitted by the frontend of a compiler serves as a stepping stone independent of the target architecture. The \lstinline!LLVM! infrastructure is the industry standard in terms of bridging this gap and was consequently the library used to translate the semantically annotated abstract syntax tree to executable machine code in the 2022 compilers course. As this project is an expansion on this, it follows naturally to build on this. 
-
-The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as, for instance, neither of the languages implemented support exception handling, floating point operations and so on, and instead only strive to cover the basics of compilers.
-
-The instructions included are
-\lstinline!trunc! has only been added in order to help cover more generated LLVM.
-%with only four distinct block terminators 
-%\begin{enumerate}
-%    \item Unconditional \lstinline!br! followed by the label to branch to
-%    \item Conditional \lstinline!br!  followed by an \lstinline!i1! condition and two labels
-%    \item \lstinline!ret! followed by an optional return value
-%    \item \lstinline!unreachable!
-%\end{enumerate}
-The branching for most of these is trivial: after successful execution the flow of all but \lstinline!br!, \lstinline!ret! and \lstinline!unreachable! will unconditionally attempt to execute the next instruction in memory (i.e. increment the instruction pointer by instruction length).
-
-Because of this, these instructions are referred to as \textit{terminators}, as their purpose is to disrupt what had otherwise been a linear flow from the beginning of this continus sequence of instructions, henceforth referred to as a \textit{basic block}.
-
 \section{Control Flow Analysis}
+
+\subsection{Building a graph}
+
+\subsection{Parameterized over individual instructions}
+
+\subsection{Parameterized over basic blocks}
 
 
 With an input stream of instructions 
@@ -277,7 +264,11 @@ Each function defined in an LLVM program is constructed with the help of
 
 \section{Liveness Analysis}
 
+\subsection{Dataflow Analysis}
+
 Dataflow analysis 
+
+\subsection{Constructing an interference graph}
 
 
 %\section{CFG -> INTERF}
@@ -298,18 +289,43 @@ Dataflow analysis
 %   * george
 %   * welsh-powell?
 \section{Graph Coloring}
-The graph coloring by simplification as described by Appel 
+The graph coloring by simplification as introduced in the Appel text takes an iterative approach.
+
+\subsection{Coloring by simplification}
 
 %% TODO
 %* optimistic coloring
 \subsection{Coalescing}
 
+Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes.
 
 \section{Linear Scan}
 
 %Live ranges for each of the temporaries are derived by visiting each instruction of each control flow block and examining its \textit{uses} and \textit{defs}.
 
 \section{Instruction Selection}
+
+\subsection{\lstinline!LLVM--! instruction set}
+
+The intermediate representation emitted by the frontend of a compiler serves as a stepping stone independent of the target architecture. The \lstinline!LLVM! infrastructure is the industry standard in terms of bridging this gap and was consequently the library used to translate the semantically annotated abstract syntax tree to executable machine code in the 2022 compilers course. As this project is an expansion on this, it follows naturally to build on this. 
+
+The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as, for instance, neither of the languages implemented support exception handling, floating point operations and so on, and instead only strive to cover the basics of compilers.
+
+The instructions included are
+\lstinline!trunc! has only been added in order to help cover more generated LLVM.
+%with only four distinct block terminators 
+%\begin{enumerate}
+%    \item Unconditional \lstinline!br! followed by the label to branch to
+%    \item Conditional \lstinline!br!  followed by an \lstinline!i1! condition and two labels
+%    \item \lstinline!ret! followed by an optional return value
+%    \item \lstinline!unreachable!
+%\end{enumerate}
+The branching for most of these is trivial: after successful execution the flow of all but \lstinline!br!, \lstinline!ret! and \lstinline!unreachable! will unconditionally attempt to execute the next instruction in memory (i.e. increment the instruction pointer by instruction length).
+
+Because of this, these instructions are referred to as \textit{terminators}, as their purpose is to disrupt what had otherwise been a linear flow from the beginning of this continus sequence of instructions, henceforth referred to as a \textit{basic block}.
+
+%%%
+\subsection{Translating to x86}
 
 Translating each IR instruction to x86 correctly is a matter of eliminating unintended side-effects. Each LLVM-- instruction is defined to have only one purpose, %% FIXME is purpose the right word?
 as concepts such as calling conventions, stack frames, or a \lstinline!FLAGS! register are completely abstracted over in order to remain platform independent.
@@ -355,7 +371,28 @@ Another factor worth considering would be memory usage, caches misses, garbage c
 \subsection{Benchmarking}
 
 %Runtime performance of generated code can be measured 
-%Measuring the performance of a compiler backend involves assessing how well it translates high-level programming code into machine code, considering factors like execution speed and generated code size. Here are several methods to evaluate the performance of a given compiler:
+
+There are different approaches to assessing how well a compiler backend translates IR to machine code targeting a specific architecture and platform. One of the primary means is to simply measure the time it takes to execute the code generated by it.
+
+Since the target architecture is x86-64, all benchmarks are executed natively on the fastest processor available to be used consistently at the time of writing. This is to maximize the sample size and in turn reduce uncertainty, but the clock speed at which the benchmarks are performed is irrelevant to how fast the generated code is. Because of this, the metric recorded is the amount of CPU cycles spent executing from start to finish instead of actual time in seconds, as the time measure only works as a more imprecise estimate of the amount of underlying work/execution steps performed on the processor.
+
+Needless to say, CPU cycles isn't a perfect measurement either, but it works to eliminate the clock speed as well as negate much of the time the scheduler allocates for other processes. Scheduling still has a negative impact on execution because of the cache misses caused by context switching, but outside of executing each program in immediate mode which isn't possible on Linux or macOS this is a sensible estimate. To further reduce context switching, benchmarks are made on a fresh restart with minimal background processes running.
+
+Additionally, all benchmarks are deterministic, so the value of each virtual variable will stay the same at every instruction step of execution when compared to another run with the same starting conditions. %all the way through the execution compared to another run of the same program with the same input. %% FIXME: not necessarily true as loops exist
+This means that the cycles measured over infinitely many runs will converge towards a 'perfect' run with no cache misses as caused by context switching. So across \(n\) runs, the run least affected by context switching will be the one with the least CPU cycles, so is the one most representative of the actual performance without noise.
+
+Measurements are made with the \lstinline!perf! utility, which relies on the \textit{hardware counters} (HC) registers of modern microprocessors, which are special purpose registers meant to record performance data live during execution. Because the analysis is integrated into the chip on which it is executing, very little overhead is incurred, and is therefore the go-to for estimating native performance.
+
+
+\subsubsection{Measurements}
+
+Each \lstinline!.ll! file present in the \lstinline!benches! directory is listed here in a table denoting the input paramater on the left column and type of allocator used.
+
+
+
+%for several reasons, one of which is to negate the clock speed as this holds no relevance to the compiler. 
+
+%considering factors like execution speed and generated code size. Here are several methods to evaluate the performance of a given compiler:
 
 %Benchmarks are performed on Apple Silicon (M1 Pro, i.e. ARMv8.5-A \cite{article}) despite the target instruction set being x86-64. This is possible because of Rosetta 2, which  translates x86-64 to ARMv8 before execution \cite{PolettoMassimiliano1999Lsra}.  Time is measured using the \lstinline!time! function of the bash shell as it is native to the chosen Docker image.  As all execution relevant to the performance of register allocation is done in user mode, only the \lstinline!user! metric is noted.
 
@@ -377,6 +414,8 @@ Another factor worth considering would be memory usage, caches misses, garbage c
 %\end{tabular}
 %\end{center}
 
+\paragraph{fib.ll}
+The 'dumb' fib is a very naive approach to finding the \(n\)th number of the Fibonacci sequence by calling itself recursively twice (decrementing \(n\) before each), which causes an exponential growth in function calls.
 \begin{center}
 \begin{tabular}{|c||c|c|c|c|} 
  \hline
