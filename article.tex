@@ -289,7 +289,13 @@ Dataflow analysis
 %   * george
 %   * welsh-powell?
 \section{Graph Coloring}
-The graph coloring by simplification as introduced in the Appel text takes an iterative approach.
+The heuristic for graph coloring as introduced in both the Appel and Aho et al. texts is a linear time approximation of an NP-complete problem. It is based on an iterative approach.
+
+Let \(k\) be the number of working registers available on the target architecture. After building the interference graph \(G\), a node \(n\) with fewer than \(k\) neighbors is chosen. As \(n\) has at most \(k-1\) neighbors, it can be removed safely by ensuring it is not assigned any color assigned to its neighbors, effectively simplifying \(G\).
+
+%  (i.e. \(\mathit{deg}(n) < k\))
+
+It must hold that \(G-\{n\}\) is \(k\)-colorable if \(G\) is \(k\)-colorable 
 
 \subsection{Coloring by simplification}
 
@@ -304,6 +310,15 @@ Coalescing is the process of eliminating moves/copies of data from one GPR to an
 %Live ranges for each of the temporaries are derived by visiting each instruction of each control flow block and examining its \textit{uses} and \textit{defs}.
 
 \section{Instruction Selection}
+
+%% NOTE: special implementations
+%%
+%% * phi nodes
+%% * calling convention:
+%%   * save/restore callee saved registers in pro/epilogue
+%%   * save/restore caller saved registersk before call
+%% * jump flags for comparison
+
 
 \subsection{\lstinline!LLVM--! instruction set}
 
