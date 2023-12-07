@@ -6,11 +6,17 @@
 %\AtEveryBibitem{\printfield{note}\clearfield{note}\item}
 
 
+\usepackage{subcaption}
 \usepackage{amsmath}
 \usepackage{tikz}
+\usetikzlibrary{angles}
+\usetikzlibrary{arrows.meta}
+\usetikzlibrary{automata}
+\usetikzlibrary{calc}
 \usetikzlibrary{chains}
-\usetikzlibrary{angles, quotes}
 \usetikzlibrary{decorations.pathreplacing}
+\usetikzlibrary{positioning}
+\usetikzlibrary{quotes}
 \usepackage{graphicx} % Required for inserting images
 \usepackage[T1]{fontenc}
 \usepackage{beramono}
@@ -77,6 +83,16 @@
   title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
 }
 
+\tikzset{
+box/.style={draw,
+  inner sep=0.3cm,
+    minimum height=1.75cm,
+    align=center},
+cbox/.style={draw,
+  font=\ttfamily,},
+}
+\tikzset{invisible/.style={minimum width=0mm,inner sep=0mm,outer sep=0mm}}
+
 \title{Implementation and comparison of register allocation to translate \lstinline!LLVM--! to x86}
 \author{William Welle Tange}
 \date{2023}
@@ -99,7 +115,7 @@
 
 \section{Introduction}
 
-Compilation refers to the process of translating from one language to another, most often from a high-level programming language intended for humans to work with, to machine- or bytecode intended to be executed on a target platform. This process can be divided into several distinct phases, which are grouped into one of two stages colloquially referred to as the \textit{frontend} and \textit{backend}. The former translating a high-level programming language to an \textit{intermediate representation} (IR) layer and the latter translating IR to executable machine code on a target platform or bytecode for a target \textit{virtual machine} (VM).
+Compilation refers to the process of translating from one language to another, most often from a high-level programming language intended for humans to work with, to machine- or bytecode intended to be executed on a target platform. This process can be divided into several distinct phases, which are grouped into one of two stages colloquially referred to as the \textit{frontend} and \textit{backend}. The former translating a high-level programming language to an \textit{intermediate representation} (IR) and the latter translating IR to executable machine code of a target architecture or bytecode of a target \textit{virtual machine} (VM).
 
 
 
@@ -107,12 +123,6 @@ Compilation refers to the process of translating from one language to another, m
   \centering
   \resizebox{0.8\textwidth}{!}{
 \begin{tikzpicture}
-  \tikzset{
-box/.style={draw,
-  inner sep=0.3cm,
-    minimum height=1.75cm,
-    align=center},
-}
 
 
   % Nodes
@@ -148,9 +158,9 @@ box/.style={draw,
 \end{tikzpicture}}
 \caption{Compiler phases, backend highlighted}
 \end{figure}
-Most operations of a general-purpose programming language are translated to a set of logic,  control, and arithmetic instructions to be executed sequentially on a computer processor: a single circuit/chip, referred to as the \textit{central processing unit} (CPU), the design of which has varied and evolved over time. Most processors executing logic operations are \textit{register machines}, in that they use a limited set of \textit{general-purpose registers} (GPRs) to store working values in combination with \textit{random access memory} (RAM) for mid-term, and other I/O peripherals for long-term storage.
+Most operations of a general-purpose programming language are translated to a set of control, logic, and arithmetic instructions to be executed sequentially on a computer processor: a single circuit/chip, referred to as the \textit{central processing unit} (CPU), the design of which has varied and evolved over time.
 
-This can largely be attributed to performance, as register machines routinely outperform so-called \textit{stack machines} \parencite{ShiYunhe2008VmsS} that are often used in VMs.
+Most CPUs are \textit{register machines}, in that they use a limited set of \textit{general-purpose registers} (GPRs) to store working values in combination with \textit{random access memory} (RAM) for mid-term, and other I/O peripherals for long-term storage. This can largely be attributed to performance, as register machines routinely outperform \textit{stack machines} \parencite{ShiYunhe2008VmsS} that are often used in VMs.
 Because of the limited amount of GPRs available simultaneously, a crucial part of the backend stage for an optimizing compiler is assigning each variable  of the source program to a GPR in such a way that maximizes performance without sacrificing correctness.
 
 The process of assigning each variable to a GPR is referred to as \textit{register allocation}, and can be approached in several different ways. This paper will seek to implement graph coloring and linear scan and evaluate them in terms of runtime performance after compilation. %% TODO: compare with time-complexity/compile-time duration?
@@ -165,20 +175,57 @@ The primary sources will be \textit{Modern Compiler Implementation in ML} \paren
 %snak om hvorfor jeg valgte llvm/ssa frem for x86 til global register llocation
 
 
-\section{Review of Literature}
+%\section{Review of Literature}
 
-The two primary sources are the \textit{Modern Compiler Implementation in ML} \cite{tiger} and Dragonbook \cite{dragon}, in addition to scientific publications concerning the linear scan approach.
+%The two primary sources are the \textit{Modern Compiler Implementation in ML} \cite{tiger} and Dragonbook \cite{dragon}, in addition to scientific publications concerning the linear scan approach.
 
-\subsection{Control Flow Analysis}
+
+
+\section{Control Flow Analysis}
+
+% TODO: figure out what traces are
+
 
 The backend of a compiler takes some form of IR as input, usually a linear sequence of instructions for each separate function. This representation is close to the level of an actual processor by design, but it isn't immediately useful for the further analysis steps needed to generate optimized code for the target architecture. %%(FIXME: why not?)
-The control flow of a given program refers to the order in which instructions are executed. While the flow of most instructions is linear, in the sense that the next instruction to be executed is located immediately after, some transfer the flow of execution elsewhere or terminate it. %% FIXME: why is this important?
+The control flow of a given program refers to the order in which instructions are executed. While the flow of most instructions is linear, in the sense that the next instruction executed is located immediately after, some transfer the flow of execution elsewhere or even terminate it. %% FIXME: why is this important?
 
 % mention basic block early on, they're a contiguous sequence of instructions that do not transfer control flow
 
-Such contiguous sequences of instructions are referred to as \textit{basic blocks}: a basic block is defined as a sequence of instructions with no branches in or out except for the first and last instructions, and can be collectively construed of as a node in a control flow graph, whose directed entry edges are from any block that directs control flow towards itself.
+Continuous sequences of instructions are referred to as \textit{basic blocks}. A basic block is defined as a sequence of instructions with no branches in or out except for the first instruction, which follows immediately either the function entry point or a label,  and the last instruction, which either terminates or transfers the flow of execution, hence these are often referred to as terminators and can be thought of as a different categoriy of instructions entirely.
 
-These instructions are referred to as \textit{terminators}, as they potentially terminate a contiguous flow of execution. This subset of instructions can be further divided into \textit{branch instructions} and those concerned with handling the callstack in function/subroutine management.
+Basic blocks represent a single node in a \textit{control flow graph} (CFG), which is a directed graph whose edges denote transfer of  control flow. The unconditional branch terminator always transfers control flow to the block labelled, meaning only one successor will follow, whereas conditional branching could transfer to either of the two, but because control flow analysis is not concerned with data, it simply adds both as successors. % TODO: rets 
+While each block has 0-2 immediate successors, the amount of predecessors is unbounded.
+
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}{0.48\textwidth}
+  \centering
+  \begin{tikzpicture}
+    \node [cbox, font=\ttfamily\tiny, align=left] (cfa) at (0,0) {define i32 @square(i32 \%0) \{\\1:\\\ \%2 = icmp sgt i32 \%0, 0\\\ br i1 \%2, label \%3, label \%9\ ; succs = \%3, \%9\\3:\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ; preds = \%1, \%3\\\ \%4 = phi i32 [ \%0, \%1 ], [ \%7, \%3 ]\\\ \%5 = phi i32 [ 0, \%1 ], [ \%6, \%3 ]\\\ \%6 = add i32 \%5, \%0\\\ \%7 = sub i32 \%4, 1\\\ \%8 = icmp ugt i32 \%7, 0\\\ br i1 \%8, label \%3, label \%9\ ; succs = \%3, \%9\\9:\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ; preds = \%3, \%1\\\ \%10 = phi i32 [ 0, \%1 ], [ \%6, \%3 ]\\\ ret i32 \%10\\\}};
+  \end{tikzpicture}
+  \end{subfigure}
+  \begin{subfigure}{0.48\textwidth}
+  \centering
+  \begin{tikzpicture}
+    \node [cbox, font=\ttfamily\tiny, align=left] (a) at (0,0) {1:\\\ \%2 = icmp sgt i32 \%0, 0\\\ br i1 \%2, label \%3, label \%9\ \ \ \ \ \ \ };
+    \node [cbox, font=\ttfamily\tiny, align=left, below=0.5cm of a] (b) {3:\\\ \%4 = phi i32 [ \%0, \%1 ], [ \%7, \%3 ]\\\ \%5 = phi i32 [ 0, \%1 ], [ \%6, \%3 ]\\\ \%6 = add i32 \%5, \%0\\\ \%7 = sub i32 \%4, 1\\\ \%8 = icmp ugt i32 \%7, 0\\\ br i1 \%8, label \%3, label \%9\\9:\\\ \%10 = phi i32 [ 0, \%1 ], [ \%6, \%3 ]\\\ ret i32 \%10\\\}};
+    \node [cbox, font=\ttfamily\tiny, align=left, below=0.5cm of b] (c) {9:\\\ \%10 = phi i32 [ 0, \%1 ], [ \%6, \%3 ]\\\ ret i32 \%10};
+    \node[right=2cm, invisible] (ab) at ($(a.south)!0.5!(b.north)$) {};
+    \node[right=2cm, invisible] (bc) at ($(b.south)!0.5!(c.north)$) {};
+  \draw [-latex] (a) -- (b);
+  %\draw [-latex] (a) to[out=-15,in=15] (c);
+  \draw [-latex] (b) -- (c);
+  %\draw [-latex] (c.north) to[bend right=1000] (b.north);
+  \draw  (a.south) to [in=0] (ab);
+  \draw  (ab) to [in=0] (bc);
+  \draw [-latex]  (bc) to [out=180,in=70] (c.north);
+  \end{tikzpicture}
+  \end{subfigure}
+  \hfill
+  \caption{Compiler phases, backend highlighted}
+\end{figure}
+
+%These instructions are referred to as \textit{terminators}, as they potentially terminate a contiguous flow of execution. This subset of instructions can be further divided into \textit{branch instructions} and those concerned with handling the callstack in function/subroutine management.
 
 %These so-called \textit{branch instructions} that alter the flow of execution are further c
 
@@ -189,9 +236,29 @@ These instructions are referred to as \textit{terminators}, as they potentially 
 
 
 
-hence a \textit{control flow graph} is derived from these. A terminator will branch elsewhere to continue execution. The destination of this has to be an annotated by a label, hence labels \textit{initiate} blocks.
+%hence a \textit{control flow graph} is derived from these. A terminator will branch elsewhere to continue execution. The destination of this has to be an annotated by a label, hence labels \textit{initiate} blocks.
 
-\subsection{Liveness Analysis}
+\subsection{Building a graph}
+
+\subsection{Parameterized over individual instructions}
+
+\subsection{Parameterized over basic blocks}
+
+
+With an input stream of instructions 
+
+%* description of blocks, how they connect etc.
+
+Each function defined in an LLVM program is constructed with the help of
+
+\section{Liveness Analysis}
+
+% * Different approaches:
+%   * Naive/greedy 
+%   * Dataflow analysis 
+%     * forward must
+%     * backwards may
+%   * linear scan
 
 Liveness analysis is the process of finding the program points at which a variable is live. This serves the function of determining which variables are live simultaneously, i.e. in interference/conflict with one another, which cannot be assigned the same physical register without overwriting the value of one another in execution. These can be derived recursively by iteratively applying so-called \textit{dataflow equations} to each node in a \textit{control-flow graph} (CFG) until a stable state/fixed point is reached.
 
@@ -208,9 +275,50 @@ conceptions of dataflow, have different approaches to nodes of a CFG, with the f
 
 % TODO: try int set instead of symbols
 
-\subsection{Graph Coloring}
+The purpose of liveness analysis is to determine which variables are live at which program point, which in turn is used to 
 
-\subsection{Linear Scan}
+\subsection{Dataflow Analysis}
+
+Dataflow analysis 
+
+\subsection{Constructing an interference graph}
+
+
+%\section{CFG -> INTERF}
+
+%* describe the dataflow algorithm from the book
+%* describe the interference criteria from the book
+
+%\section{INTERF -> DOT}
+
+%* ez ???
+
+%\section{INTERF -> DOT/Assignment}
+
+%* list of methods for coalescing/allocating:
+%   * ocamlgraph builtin
+%   * greedy 
+%   * briggs
+%   * george
+%   * welsh-powell?
+\section{Graph Coloring}
+The heuristic for graph coloring as introduced in Appel and Aho et al. texts is a linear time approximation of an NP-complete problem. It is based on an iterative approach.
+
+Let \(k\) be the number of working registers available on the target architecture. After building the interference graph \(G\), a node \(n\) with fewer than \(k\) neighbors is chosen. As \(n\) has at most \(k-1\) neighbors, it can be removed safely by ensuring it is not assigned any color assigned to its neighbors, effectively simplifying \(G\).
+
+%  (i.e. \(\mathit{deg}(n) < k\))
+
+It must hold that \(G-\{n\}\) is \(k\)-colorable if \(G\) is \(k\)-colorable 
+
+\subsection{Coloring by simplification}
+
+%% TODO
+%* optimistic coloring
+\subsection{Coalescing}
+
+Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes.
+
+\section{Linear Scan}
 
 %Write about Appel book.
 
@@ -247,65 +355,7 @@ conceptions of dataflow, have different approaches to nodes of a CFG, with the f
 %
 %>Even when only one front end and one back end are being built, a good IR can modularize the task, so that the front end is not complicated with machine-specific details, and the back end is not bothered with information specific to one source language.
 
-\section{Control Flow Analysis}
-
-\subsection{Building a graph}
-
-\subsection{Parameterized over individual instructions}
-
-\subsection{Parameterized over basic blocks}
-
-
-With an input stream of instructions 
-
-%* description of blocks, how they connect etc.
-
-Each function defined in an LLVM program is constructed with the help of
-
-\section{Liveness Analysis}
-
-\subsection{Dataflow Analysis}
-
-Dataflow analysis 
-
-\subsection{Constructing an interference graph}
-
-
-%\section{CFG -> INTERF}
-
-%* describe the dataflow algorithm from the book
-%* describe the interference criteria from the book
-
-%\section{INTERF -> DOT}
-
-%* ez ???
-
-%\section{INTERF -> DOT/Assignment}
-
-%* list of methods for coalescing/allocating:
-%   * ocamlgraph builtin
-%   * greedy 
-%   * briggs
-%   * george
-%   * welsh-powell?
-\section{Graph Coloring}
-The heuristic for graph coloring as introduced in both the Appel and Aho et al. texts is a linear time approximation of an NP-complete problem. It is based on an iterative approach.
-
-Let \(k\) be the number of working registers available on the target architecture. After building the interference graph \(G\), a node \(n\) with fewer than \(k\) neighbors is chosen. As \(n\) has at most \(k-1\) neighbors, it can be removed safely by ensuring it is not assigned any color assigned to its neighbors, effectively simplifying \(G\).
-
-%  (i.e. \(\mathit{deg}(n) < k\))
-
-It must hold that \(G-\{n\}\) is \(k\)-colorable if \(G\) is \(k\)-colorable 
-
-\subsection{Coloring by simplification}
-
-%% TODO
-%* optimistic coloring
-\subsection{Coalescing}
-
-Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes.
-
-\section{Linear Scan}
+As linear scan 
 
 %Live ranges for each of the temporaries are derived by visiting each instruction of each control flow block and examining its \textit{uses} and \textit{defs}.
 
@@ -383,6 +433,7 @@ Relevant metrics by which to compare these variations are naturally the performa
 
 Another factor worth considering would be memory usage, caches misses, garbage collection (although not relevant to this as it doesn't use GC), vectorizatiion (loop optimizations by SIMD) etc.
 
+\newpage
 \subsection{Benchmarking}
 
 %Runtime performance of generated code can be measured 
@@ -397,6 +448,8 @@ Additionally, all benchmarks are deterministic, so the value of each virtual var
 This means that the cycles measured over infinitely many runs will converge towards a 'perfect' run with no cache misses as caused by context switching. So across \(n\) runs, the run least affected by context switching will be the one with the least CPU cycles, so is the one most representative of the actual performance without noise.
 
 Measurements are made with the \lstinline!perf! utility, which relies on the \textit{hardware counters} (HC) registers of modern microprocessors, which are special purpose registers meant to record performance data live during execution. Because the analysis is integrated into the chip on which it is executing, very little overhead is incurred, and is therefore the go-to for estimating native performance.
+
+%% NOTE: måske noget om hvordan intel laver sin egen arkitektur?
 
 
 \subsubsection{Measurements}
