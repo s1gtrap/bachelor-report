@@ -115,7 +115,7 @@ cbox/.style={draw,
 
 \section{Introduction}
 
-Compilation refers to the process of translating from one language to another, most often from a high-level programming language intended for humans to work with, to machine- or bytecode intended to be executed on a target platform. This process can be divided into several distinct phases, which are grouped into one of two stages colloquially referred to as the \textit{frontend} and \textit{backend}. \textcolor{orange}{The former translating a high-level programming language to an \textit{intermediate representation} (IR) and the latter translating IR to executable machine code of a target architecture or bytecode of a target \textit{virtual machine} (VM).}
+Compilation refers to the process of translating from one language to another, most often from a high-level programming language intended for humans to work with, to machine- or bytecode intended to be executed on a target architecture. This process can be divided into several distinct phases, which are grouped into one of two stages colloquially referred to as the \textit{frontend} and \textit{backend}, the former translating a high-level programming language to an \textit{intermediate representation} (IR) and the latter translating IR to executable machine code of a target architecture or bytecode of a target \textit{virtual machine} (VM).
 
 
 
@@ -191,14 +191,10 @@ The control flow of a given program refers to the order in which instructions ar
 
 % mention basic block early on, they're a contiguous sequence of instructions that do not transfer control flow
 
-\textcolor{mygreen}{
-Continuous sequences of instructions are referred to as \textit{basic blocks}. A basic block is defined as a sequence of instructions with no branches in or out except for the first instruction, which follows immediately either the function entry point or a label,  and the last instruction, which either terminates or transfers the flow of execution, hence these are often referred to as terminators and can be thought of as a different categoriy of instructions entirely.
-}
+A continuous sequence of instructions is referred to as a \textit{basic block}, which is defined as a sequence with no branches in or out except for the first instruction, following immediately after the function entry or a label, and the last instruction, either terminates or transferring the flow of execution. These are often referred to as terminators and can be thought of as an entirely different categoriy of instructions. % TODO: måske drop 'can be thought of'
 
-\textcolor{mygreen}{
 Basic blocks represent a single node in a \textit{control flow graph} (CFG), which is a directed graph whose edges denote transfer of  control flow. The unconditional branch terminator always transfers control flow to the block labelled, meaning only one successor will follow, whereas conditional branching could transfer to either of the two, but because control flow analysis is not concerned with data, it simply adds both as successors. % TODO: rets 
 While each block has 0-2 immediate successors, the amount of predecessors is unbounded.
-}
 
 \begin{figure}[h]
   \centering
@@ -279,7 +275,6 @@ conceptions of dataflow, have different approaches to nodes of a CFG, with the f
 
 % TODO: try int set instead of symbols
 
-\color{mygreen}
 The purpose of liveness analysis is to determine which variables are live at which program point, which in turn is used to 
 
 \subsection{Dataflow Analysis}
@@ -322,7 +317,6 @@ It must hold that \(G-\{n\}\) is \(k\)-colorable if \(G\) is \(k\)-colorable
 \subsection{Coalescing}
 
 Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes.
-\color{black}
 
 \section{Linear Scan}
 
@@ -439,7 +433,6 @@ Relevant metrics by which to compare these variations are naturally the performa
 
 Another factor worth considering would be memory usage, caches misses, garbage collection (although not relevant to this as it doesn't use GC), vectorizatiion (loop optimizations by SIMD) etc.
 
-\color{mygreen}
 \subsection{Benchmarking}
 
 %Runtime performance of generated code can be measured 
@@ -490,7 +483,6 @@ Each \lstinline!.ll! file present in the \lstinline!benches! directory is listed
 
 \paragraph{fib.ll}
 The 'dumb' fib is a very naive approach to finding the \(n\)th number of the Fibonacci sequence by calling itself recursively twice (decrementing \(n\) before each), which causes an exponential growth in function calls.
-\color{black}
 \begin{center}
 \begin{tabular}{|c||c|c|c|c|} 
  \hline
