@@ -77,11 +77,37 @@
   showspaces=false,                % show spaces everywhere adding particular underscores; it overrides 'showstringspaces'
   showstringspaces=false,          % underline spaces within strings only
   showtabs=false,                  % show tabs within strings adding particular underscores
-  stepnumber=2,                    % the step between two line-numbers. If it's 1, each line will be numbered
+  %stepnumber=2,                    % the step between two line-numbers. If it's 1, each line will be numbered
   stringstyle=\color{mymauve},     % string literal style
   tabsize=2,	                   % sets default tabsize to 2 spaces
   title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
 }
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    %breaklines=true,                 
+    %captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=mystyle}
 
 \tikzset{
 box/.style={draw,
@@ -184,6 +210,7 @@ The primary sources will be \textit{Modern Compiler Implementation in ML} \paren
 \section{Control Flow Analysis}
 
 % TODO: figure out what traces are
+% TODO: mention dominators etc.
 
 
 The backend of a compiler takes some form of IR as input, usually a linear sequence of instructions for each separate function. This representation is close to the level of an actual processor by design, but it isn't immediately useful for the further analysis steps needed to generate optimized code for the target architecture. %%(FIXME: why not?)
@@ -191,10 +218,10 @@ The control flow of a given program refers to the order in which instructions ar
 
 % mention basic block early on, they're a contiguous sequence of instructions that do not transfer control flow
 
-A continuous sequence of instructions is referred to as a \textit{basic block}, which is defined as a sequence with no branches in or out except for the first instruction, following immediately after the function entry or a label, and the last instruction, either terminates or transferring the flow of execution. These are often referred to as terminators and can be thought of as an entirely different categoriy of instructions. % TODO: måske drop 'can be thought of'
+A continuous flow of instructions is referred to as a \textit{basic block}, defined as a sequence of instructions with no branches in or out except for the first instruction (referred to as a \textit{leader}, immediately following either the function entry or label) and the last (referred to as a \textit{terminator}, as it either terminates or transfers the flow of execution). %These are often referred to as terminators and can be thought of as an entirely different categoriy of instructions. % TODO: måske drop 'can be thought of'
 
 Basic blocks represent a single node in a \textit{control flow graph} (CFG), which is a directed graph whose edges denote transfer of  control flow. The unconditional branch terminator always transfers control flow to the block labelled, meaning only one successor will follow, whereas conditional branching could transfer to either of the two, but because control flow analysis is not concerned with data, it simply adds both as successors. % TODO: rets 
-While each block has 0-2 immediate successors, the amount of predecessors is unbounded.
+While each block has 0-2 immediate successors, the amount of predecessors is unbounded as the amount of branches targeting a specific leader is unlimited.
 
 \begin{figure}[h]
   \centering
@@ -208,7 +235,7 @@ While each block has 0-2 immediate successors, the amount of predecessors is unb
   \centering
   \begin{tikzpicture}
     \node [cbox, font=\ttfamily\tiny, align=left] (a) at (0,0) {1:\\\ \%2 = icmp sgt i32 \%0, 0\\\ br i1 \%2, label \%3, label \%9\ \ \ \ \ \ \ };
-    \node [cbox, font=\ttfamily\tiny, align=left, below=0.5cm of a] (b) {3:\\\ \%4 = phi i32 [ \%0, \%1 ], [ \%7, \%3 ]\\\ \%5 = phi i32 [ 0, \%1 ], [ \%6, \%3 ]\\\ \%6 = add i32 \%5, \%0\\\ \%7 = sub i32 \%4, 1\\\ \%8 = icmp ugt i32 \%7, 0\\\ br i1 \%8, label \%3, label \%9\\9:\\\ \%10 = phi i32 [ 0, \%1 ], [ \%6, \%3 ]\\\ ret i32 \%10\\\}};
+    \node [cbox, font=\ttfamily\tiny, align=left, below=0.5cm of a] (b) {3:\\\ \%4 = phi i32 [ \%0, \%1 ], [ \%7, \%3 ]\\\ \%5 = phi i32 [ 0, \%1 ], [ \%6, \%3 ]\\\ \%6 = add i32 \%5, \%0\\\ \%7 = sub i32 \%4, 1\\\ \%8 = icmp ugt i32 \%7, 0\\\ br i1 \%8, label \%3, label \%9};
     \node [cbox, font=\ttfamily\tiny, align=left, below=0.5cm of b] (c) {9:\\\ \%10 = phi i32 [ 0, \%1 ], [ \%6, \%3 ]\\\ ret i32 \%10};
 
     \node[right= 1cm of a.south, invisible] (ac1)  {};
@@ -284,27 +311,78 @@ Each function defined in an LLVM program is constructed with the help of
 %     * forward must
 %     * backwards may
 %   * linear scan
+%
+%  TODO: comment on interrupts
 
-Liveness analysis is the process of finding the program points at which a variable is live. This serves the function of determining which variables are live simultaneously, i.e. in interference/conflict with one another, which cannot be assigned the same physical register without overwriting the value of one another in execution. These can be derived recursively by iteratively applying so-called \textit{dataflow equations} to each node in a \textit{control-flow graph} (CFG) until a stable state/fixed point is reached.
+Translating IR with an unbounded number of variables to a CPU with a bounded number of registers involves the process of assigning each variable a register s.t. no value that can be used in the future is overwritten. %Therefore, any variable that may be used in the future is considered \textit{live}, and said to be in interference with any other variable live at any intersecting point.
+Variables that are in use at a given program point are considered \textit{'live'}, and although variables can be assigned the same register, %if they are not in interference
+variables that are live at the same time (i.e. at intersecting program points) cannot, in which case they are also said to be in interference with one another.
+Although variables that are not in interference can be assigned the same register, and finding the precise points at which any variable is live is trivial for linear sequences of instructions, when conditional branching is introduced, deriving the path of execution becomes undecidable because of the halting problem.
 
-The algorithm described in \textit{Modern Compiler Implementation in ML} \cite{tiger} and \cite{dragon} is based on the following equations for the live-in and live-out variables respectively:
+Suppose a function that calls another:
+
+\begin{lstlisting}[language=LLVM,firstnumber=1]
+define i32 @countcall(i32 %x0) {
+  %x1 = add i32 %x0, 1
+  call ptr @subproc()
+  ret i32 %x1
+}
+\end{lstlisting}
+Because of the halting problem, static analysis cannot determine if the call to \lstinline!@subproc! will return for every possible implementation.  %which may or may not return control to the calling function:
+ So when assigning \lstinline!%x1! a register it is undecidable whether the variable must be live in the last return instruction, i.e. needs to live across the call to another function which can overwrite several registers depending on calling conventions. Because of this, any sound approach to liveness analysis will be an approximation.
+
+ % TODO: maybe find a better exampple with a better assignment that computer can't find?
+ % TODO: maybe mention exponential brute force algorithms?
+
+A sound albeit very naive approach is to consider every variable live at every program point, s.t. every variable is in interference with one another, producing a fully connected interference graph. % FIXME: find a place for: This generally isn't a very performant approach in terms of execution 
+Such a heuristic is greedy in the sense that it picks an assignment known to be safe for the least amount of preprocessing work possible. Although this can possibly be a very inefficient assignment at runtime, as a number of \(n\)  variables greater than \(k\) working registers causes \(n-k\) variables to be spilled to memory, which can greatly reduce performance, but  allows for translation in constant time. %FIXME: is this even true?
+
+\subsection{Dataflow Analysis}
+
+Another approach, which is a much more precise approximation, is a specific variant of the dataflow analysis as described in \textit{Modern Compiler Implementation in ML} (\cite{tiger}) and \textit{Compilers: Principles, Techniques, and Tools} (\cite{dragon}). In general, dataflow analysis is the process of finding the possible paths in which data may propagate through different branches of execution.  While several applications of this exist (like constant propagation, reaching defnitions, available expressions etc.), one that is immediately beneficial in the case of liveness analysis is one that traverses a CFG in the reverse order of execution (i.e.  \textit{backwards} flow), and tagging any instructions in which a variable \textit{may} be used: also referred to as \textit{backwards may} analysis.   This algorithm calculates which program points each variable may be accessed from with some conservative constraints known to maintain correctness. Specifically, these are the transfer and control-flow constraints. %, the former of which must satisfy a transfer function a
+
+The transfer constraint is based on a \textit{transfer function} that describe how liveness is affected across instructions. For each instruction, there is a transfer function that describe how liveness changes from one point to the one immediately after. For example, as an arithmetic operation needs to be assigned a new temporary variable, the liveness of a new variable is propagated to all  instructions  executed subsequently. This is done by applying the transfer function to the current \textit{live-out} set to stop further propagation of variables defined by the currently visited instruction. % TODO: In fact, because the IR is in SSA form, the only time 
 \begin{align}
-  in\left[n\right] &= use\left[n\right] \cup (out\left[n\right] - \mathit{def}\left[n\right])\\
-  out\left[n\right] &= \bigcup_{s\in \mathit{succ}\left[n\right]} in\left[s\right]
+  \mathit{in}\left[n\right] &= \mathit{use}\left[n\right] \cup (\mathit{out}\left[n\right] - \mathit{def}\left[n\right])
 \end{align}
-where \(use\left[n\right]\) is the set of all dependent variables, \(def\left[n\right]\) is the set of all variables defines and \(succ\left[n\right]\) is the set of all immediate successor nodes of \(n\).
+Control-flow constraints on the other hand propagate the use of variables to previously executed instructions, expecting these to be defined somewhere further up the CFG. This is done by propagating the union of the \textit{live-in} set associated with all immediate successor nodes. This is also referred to as the \textit{meet operator}, whose operator depends on the type of dataflow alanysis as well, but for liveness analysis a union is performed on the previos \textit{live-in} variables.
+\begin{align}
+  \mathit{out}\left[n\right] &= \bigcup_{s\in \mathit{succ}\left[n\right]} \mathit{in}\left[s\right]
+\end{align}
+%in order to maintain correctness by iteratively applying a set of constraints until a fixed point is reached.
+%These constraints are applied to the \(\textit{live-in}\left[i\right]\) and  \(\textit{live-out}\left[i\right]\) sets for every instruction \(i\). Both are initialized to the empty set \(\emptyset\).
+%The dataflow analysis approach builds the set of variables that 
+%Each type of instruction has some semantic attributes that are applied to the system state upon execution. This change is also referres to as a \textit{transfer function} as it transitions from one state to another.
+%can be thought of as a \textit{transfer function} in terms of liveness, denoting which variables may be live before and after execution.
+Initially, two sets are associated with each instruction: the \textit{live-in} and \textit{live-out} sets, which is the set of variables live before and after execution respectively. Then the following two equations are applied iteratively until a fixed point is reached, i.e. a point in which neither \(\mathit{in}[n]\) or \(\mathit{out}[n]\) is changed for all \(n\) instructions.
 
-The structure of the CFG is inherently vague as both   \cite{tiger} and \textit{Compilers : Principles, Techniques, and Tools} \cite{dragon}, while based on the same underlying % TODO: fix references
-conceptions of dataflow, have different approaches to nodes of a CFG, with the former taking each individual instruction into consideration and the latter each basic block. Either of these approaches are sound 
+
+%builds sets of \textit{live-in} and  \textit{live-out} variable for each instruction.
+
+% must be assigned in such a way that ensures its availability at every subsequent use throughout execution.
+
+%Variables can be assigned the same register if they are not in use at the same time, so variables that are in use at the same time are said to be in interference with one another.
+
+%Liveness analysis is the process of finding the program points at which a variable is live. This serves the function of determining which variables are live simultaneously, i.e. in conflict/interference with one another, so cannot be assigned the same physical register without overwriting the value of one another.
+
+
+
+%Another approach that takes CFG into consideration is that of 
+
+
+%These can be derived recursively by iteratively applying so-called \textit{dataflow equations} to each node in a \textit{control-flow graph} (CFG) until a stable state/fixed point is reached.
+
+%The algorithm described in \textit{Modern Compiler Implementation in ML} \cite{tiger} and \cite{dragon} is based on the following equations for the live-in and live-out variables respectively:
+%where \(use\left[n\right]\) is the set of all dependent variables, \(def\left[n\right]\) is the set of all variables defines and \(succ\left[n\right]\) is the set of all immediate successor nodes of \(n\).
+
+%The structure of the CFG is inherently vague as both   \cite{tiger} and \textit{Compilers : Principles, Techniques, and Tools} \cite{dragon}, while based on the same underlying % TODO: fix references
+%conceptions of dataflow, have different approaches to nodes of a CFG, with the former taking each individual instruction into consideration and the latter each basic block. Either of these approaches are sound 
 
 
 % TODO: try int set instead of symbols
 
-The purpose of liveness analysis is to determine which variables are live at which program point, which in turn is used to 
+%The purpose of liveness analysis is to determine which variables are live at which program point, which in turn is used to 
 
-\subsection{Dataflow Analysis}
-
-Dataflow analysis 
 
 \subsection{Constructing an interference graph}
 
