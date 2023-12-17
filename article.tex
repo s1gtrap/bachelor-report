@@ -2,11 +2,14 @@
 \usepackage[style=apa]{biblatex}
 
 
+\bibliography{article}
+
 \addbibresource{\jobname.bib}
 %\AtEveryBibitem{\printfield{note}\clearfield{note}\item}
 
 
 \usepackage{subcaption}
+\usepackage[margin=1in]{geometry}
 \usepackage{amsmath}
 \usepackage{tikz}
 \usetikzlibrary{angles}
@@ -26,6 +29,9 @@
 \usepackage{realboxes}
 \usepackage{titlesec}
 \usepackage{xcolor}
+\usepackage{minted}
+
+\definecolor{LightGray}{gray}{0.97}
 
 
 \setcounter{secnumdepth}{4}
@@ -346,11 +352,11 @@ Another approach, which is a much more precise approximation, is a specific vari
 This algorithm calculates which program points each variable may be accessed from with some conservative constraints known to maintain correctness. Specifically, these are the transfer and control-flow constraints. %, the former of which must satisfy a transfer function a
 
 The transfer constraint is based on a \textit{transfer function} that describes how liveness is affected across instructions. For each instruction, there is a transfer function that describes how liveness changes from one point to the one immediately after. For example, as an arithmetic operation needs to be assigned a new temporary variable, the liveness of a new variable is propagated to all  instructions  executed subsequently. This is done by applying the transfer function to the current \textit{live-out} set to stop further propagation of variables defined by the currently visited instruction. % TODO: In fact, because the IR is in SSA form, the only time 
-\begin{align}
+\begin{align}\label{flowin}
   \mathit{in}\left[n\right] &= \mathit{use}\left[n\right] \cup (\mathit{out}\left[n\right] - \mathit{def}\left[n\right])
 \end{align}
 Control-flow constraints on the other hand propagate the use of variables to previously executed instructions, expecting these to be defined somewhere further up the CFG. This is done by propagating the union of the \textit{live-in} set associated with all immediate successor nodes. This is also referred to as the \textit{meet operator}, whose operator depends on the type of dataflow alanysis as well, but for liveness analysis a union is performed on the previos \textit{live-in} variables.
-\begin{align}
+\begin{align}\label{flowout}
   \mathit{out}\left[n\right] &= \bigcup_{s\in \mathit{succ}\left[n\right]} \mathit{in}\left[s\right]
 \end{align}
 %in order to maintain correctness by iteratively applying a set of constraints until a fixed point is reached.
@@ -359,6 +365,8 @@ Control-flow constraints on the other hand propagate the use of variables to pre
 %Each type of instruction has some semantic attributes that are applied to the system state upon execution. This change is also referres to as a \textit{transfer function} as it transitions from one state to another.
 %can be thought of as a \textit{transfer function} in terms of liveness, denoting which variables may be live before and after execution.
 Initially, two sets are associated with each instruction: the \textit{live-in} and \textit{live-out} sets, which are the sets of variables that are live respectively before and after execution. Then the following two equations are applied iteratively until a fixed point is reached, i.e. a point in which neither \(\mathit{in}[n]\) or \(\mathit{out}[n]\) is changed for all \(n\) instructions.
+
+% TODO: onwards!
 
 
 %builds sets of \textit{live-in} and  \textit{live-out} variable for each instruction.
@@ -387,8 +395,78 @@ Initially, two sets are associated with each instruction: the \textit{live-in} a
 
 %The purpose of liveness analysis is to determine which variables are live at which program point, which in turn is used to 
 
+\subsubsection{Implementation}
 
-\subsection{Constructing an interference graph}
+The \texttt{dataflow} function takes a list of instructions \texttt{insns}, an array of CFG vertices \texttt{ids} as well as the CFG \texttt{g}. The \(i\)th element of \texttt{ids} is the CFG vertex corresponding to the \(i\)th entry of \texttt{insns}. The decision to use arrays instead of pairing up each instruction with both \textit{live-in} and \textit{live-out} sets was made because of the \textit{live-out} equation \eqref{flowout} that needs to find all \textit{live-out} sets of the successor blocks. Hence random access arrays were chosen instead of linear search.
+\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let dataflow (insns : Cfg.insn list) (ids : Cfg.G.V.t array) (g : Cfg.G.t) =
+  let insns = List.mapi (fun i v -> (i, v)) insns |> List.rev in
+  let in_ = Array.init (List.length insns) (fun _ -> S.SS.empty) in
+  let out = Array.init (List.length insns) (fun _ -> S.SS.empty) in
+  let rec dataflow () =
+    let flowout = (* ... *)
+    let flowin = (* ... *)
+    let flow changed insn = changed || flowout insn || flowin insn in
+    if List.fold_left flow false insns then dataflow () else (in_, out)
+  in
+  dataflow ()
+\end{minted}
+The \texttt{flowin} function correponds to the \textit{live-in} equation \eqref{flowin} and is implemented as follows:
+\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let flowin (i, insn) =
+  let newin = S.SS.union (use insn) (S.SS.diff out.(i) (def insn)) in
+  let changed = not (S.SS.equal newin in_.(i)) in
+  if changed then in_.(i) <- newin;
+  changed
+\end{minted}
+Where \lstinline!S.SS! is a \lstinline!Set.S! module built over the \lstinline!symbol! type found in \lstinline!lib/symbol.ml!:
+
+\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+type symbol = string * int
+(* ... *)
+module SS = Set.Make (struct
+  type t = symbol
+  let compare (_, n1) (_, n2) = compare n1 n2
+end)
+type set = SS.t
+\end{minted}
+
+\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let flowout (i, _) =
+  let newout =
+    let succ = Cfg.G.succ g ids.(i) in
+    List.fold_left
+      (fun s v -> S.SS.union s in_.(Cfg.G.V.label v))
+      S.SS.empty succ
+  in
+  let changed = not (S.SS.equal newout out.(i)) in
+  if changed then out.(i) <- newout;
+  changed
+\end{minted}
+
+
+\subsection{Interference Graph}
+
+The purpose for conducting dataflow analysis as above is finding variables that may be assigned the same register. This is done by building an interference graph, which is an undirected graph, whose nodes represent variables and edges signify interference between them, i.e. variables \(a\) and \(b\) live at overlapping program points is represented with an edge \((a,b)\).
+
+
+Constructing an interference graph only depends on the \textit{live-out} set and type of instruction. If the instruction defines a variable, said variable is in interference with all variables in the \textit{live-out} set. There is one exception however: according to the Appel text, move instructions (i.e. phi nodes in the case of SSA form) are given special consideration. The purpose of phi nodes is to copy/move a certain value from a certain predecessor, so they are not necessarily in conflict for being live at the same time. Rather it would often benefit if they were assigned the same register to spare unnecessary moves. % TODO: uddyb hvorfor de ikke er i interference?
+
+
+Because of this, for any phi node of the form 
+\[
+  a = \Phi (b_1, ..., b_n)
+\]
+add edges to all \textit{live-out} variables not in \(B\)
+\[
+  \forall b_j \in (\mathit{out}[i] \setminus B), \mathit{add\_edge}(a, b_j)
+\]
+For any other instruction the defines a variable \(a\)
+\[
+  \forall b_j \in B, \mathit{add\_edge}(a, b_j)
+\]
+Although the Appel text notes interference with concrete registers as well as overlapping variables, this isn't considered in this implementation.
+
 
 
 %\section{CFG -> INTERF}
@@ -409,13 +487,12 @@ Initially, two sets are associated with each instruction: the \textit{live-in} a
 %   * george
 %   * welsh-powell?
 \section{Graph Coloring}
-The heuristic for graph coloring as introduced in Appel and Aho et al. texts is a linear time approximation of an NP-complete problem. It is based on an iterative approach.
+Once an interference graph is constructed, the actual assignments can be found using graph coloring. Although this has long been known to be NP-complete, the heuristic as introduced in both the Appel and Aho et al. texts is a linear time approximation to this problem. It is based on an iterative approach wherein nodes known to be colorable are removed until either an empty graph remains in which case the original graph \(G\) is \(k\)-colorable  or nodes with more than \(k\) neighbours remain, in which case a node is chosen to be spilled to the stack and removed. This is then repeated.
 
-Let \(k\) be the number of working registers available on the target architecture. After building the interference graph \(G\), a node \(n\) with fewer than \(k\) neighbors is chosen. As \(n\) has at most \(k-1\) neighbors, it can be removed safely by ensuring it is not assigned any color assigned to its neighbors, effectively simplifying \(G\).
-
+Let \(k\) be the number of working registers available on the target architecture. After building the interference graph \(G\), a node \(n\) with fewer than \(k\) neighbors is chosen. As \(n\) has at most \(k-1\) neighbors, it can be removed safely, effectively simplifying \(G\). It is pushed to a stack in order to preserve the order in which they are removed so that \(G\) can be rebuilt and the corresponding registers can be assigned correctly once a \(k\)-colorable assignment is found.
 %  (i.e. \(\mathit{deg}(n) < k\))
 
-It must hold that \(G-\{n\}\) is \(k\)-colorable if \(G\) is \(k\)-colorable 
+%It must hold that \(G-\{n\}\) is \(k\)-colorable if \(G\) is \(k\)-colorable 
 
 \subsection{Coloring by simplification}
 
@@ -423,7 +500,9 @@ It must hold that \(G-\{n\}\) is \(k\)-colorable if \(G\) is \(k\)-colorable
 %* optimistic coloring
 \subsection{Coalescing}
 
-Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes.
+Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes. This is similar to but  not the same as  the lack of interference edges between variables subject to move operations. This is because variables \(a\) and \(b\) may still be assigned different registers or even spilled if,  for instance, either of them are of significant degree. Coalescing joins nodes \(a\) and \(b\) to node \(ab\) preserving the edges of both to maintain soundness.
+
+Since all edges are preserved, the resulting node \(an\) may be of a much higher degree. Because to this, only strategies that produce a \(k\)-colorable graph are worth considering as worth considering as additional spills negate the purpose entirely.
 
 \section{Linear Scan}
 
@@ -526,6 +605,10 @@ An example of this would be the division/remainder operation: since integer divi
 %* safest possible x86 translation
 %
     %* moving sys-v abi arguments to assigned registers is treacherous
+
+\subsection{Asserting correctness}
+
+Validating the correctness of each instruction translation is a complicated task given how low-level it is. One approach is attaching a debugger and examining the state before and after the translated sequence of x86 instructions is executed. The result of applying a binary operation should only affect the assigned register, for instance.
 
 \section{Further Optimization}
 
