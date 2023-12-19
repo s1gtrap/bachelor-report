@@ -459,7 +459,7 @@ Because of this, for any phi node of the form
 \]
 add edges to all \textit{live-out} variables not in \(B\)
 \[
-  \forall b_j \in (\mathit{out}[i] \setminus B), \mathit{add\_edge}(a, b_j)
+  \forall b_j \in (\mathit{out}[i] \setminus B), \mathit{add\_edge}(a, b_j) \text{ where } B = \{b_1, ..., b_n\}
 \]
 For any other instruction the defines a variable \(a\)
 \[
