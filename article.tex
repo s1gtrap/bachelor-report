@@ -400,6 +400,7 @@ Initially, two sets are associated with each instruction: the \textit{live-in} a
 
 %\subsubsection{Implementation}
 
+\color{mygreen}
 The simplest ones to implement are the \lstinline!def! and \lstinline!use! functions, as all of the values of interest are located immediately within the instruction itself and not hidden behind some layer of indirection:
 \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
 let def (s : S.SS.t) (insn : Cfg.insn) =
@@ -520,6 +521,8 @@ Although the Appel text notes interference with concrete registers as well as ov
 Once an interference graph is constructed, the actual assignments can be found using graph coloring. Although this has long been known to be NP-complete, the heuristic as introduced in both the Appel and Aho et al. texts is a linear time approximation to this problem. It is based on an iterative approach wherein nodes known to be colorable are removed until either an empty graph remains in which case the original graph \(G\) is \(k\)-colorable  or nodes with more than \(k\) neighbours remain, in which case a node is chosen to be spilled to the stack and removed. This is then repeated.
 
 Let \(k\) be the number of working registers available on the target architecture. After building the interference graph \(G\), a node \(n\) with fewer than \(k\) neighbors is chosen. As \(n\) has at most \(k-1\) neighbors, it can be removed safely, effectively simplifying \(G\). It is pushed to a stack in order to preserve the order in which they are removed so that \(G\) can be rebuilt and the corresponding registers can be assigned correctly once a \(k\)-colorable assignment is found.
+
+\color{black}
 %  (i.e. \(\mathit{deg}(n) < k\))
 
 %It must hold that \(G-\{n\}\) is \(k\)-colorable if \(G\) is \(k\)-colorable 
@@ -530,9 +533,11 @@ Let \(k\) be the number of working registers available on the target architectur
 %* optimistic coloring
 \subsection{Coalescing}
 
-Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes. This is similar to but  not the same as  the lack of interference edges between variables subject to move operations. This is because variables \(a\) and \(b\) may still be assigned different registers or even spilled if,  for instance, either of them are of significant degree. Coalescing joins nodes \(a\) and \(b\) to node \(ab\) preserving the edges of both to maintain soundness.
+
+Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes. \color{mygreen} This is similar to but  not the same as  the lack of interference edges between variables subject to move operations. This is because variables \(a\) and \(b\) may still be assigned different registers or even spilled if,  for instance, either of them are of significant degree. Coalescing joins nodes \(a\) and \(b\) to node \(ab\) preserving the edges of both to maintain soundness.
 
 Since all edges are preserved, the resulting node \(an\) may be of a much higher degree. Because to this, only strategies that produce a \(k\)-colorable graph are worth considering as worth considering as additional spills negate the purpose entirely.
+\color{black}
 
 \section{Linear Scan}
 
@@ -571,7 +576,7 @@ Since all edges are preserved, the resulting node \(an\) may be of a much higher
 %
 %>Even when only one front end and one back end are being built, a good IR can modularize the task, so that the front end is not complicated with machine-specific details, and the back end is not bothered with information specific to one source language.
 
-As linear scan 
+%TODO: As linear scan 
 
 %Live ranges for each of the temporaries are derived by visiting each instruction of each control flow block and examining its \textit{uses} and \textit{defs}.
 
@@ -638,7 +643,9 @@ An example of this would be the division/remainder operation: since integer divi
 
 \subsection{Asserting correctness}
 
+\color{mygreen}
 Validating the correctness of each instruction translation is a complicated task given how low-level it is. One approach is attaching a debugger and examining the state before and after the translated sequence of x86 instructions is executed. The result of applying a binary operation should only affect the assigned register, for instance.
+\color{black}
 
 \section{Further Optimization}
 
@@ -669,6 +676,10 @@ This means that the cycles measured over infinitely many runs will converge towa
 Measurements are made with the \lstinline!perf! utility, which relies on the \textit{hardware counters} (HC) registers of modern microprocessors, which are special purpose registers meant to record performance data live during execution. Because the analysis is integrated into the chip on which it is executing, very little overhead is incurred, and is therefore the go-to for estimating native performance.
 
 %% NOTE: måske noget om hvordan intel laver sin egen arkitektur?
+
+% TODO: uddyb mere om instrumentering og måske mere om cache meisses osv.
+%
+% FIXME: husk at nævn hvordan størrelsen af kompileret kode har en indflydelse på performance
 
 
 \subsubsection{Measurements}
