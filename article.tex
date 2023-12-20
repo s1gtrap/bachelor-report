@@ -400,8 +400,7 @@ Initially, two sets are associated with each instruction: the \textit{live-in} a
 
 %\subsubsection{Implementation}
 
-\color{mygreen}
-The simplest ones to implement are the \lstinline!def! and \lstinline!use! functions, as all of the values of interest are located immediately within the instruction itself and not hidden behind some layer of indirection:
+The simplest equations to implement are the \lstinline!def! and \lstinline!use! functions, as all of the values of interest are located immediately within the instruction itself and not hidden behind some layer of indirection:
 \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
 let def (s : S.SS.t) (insn : Cfg.insn) =
   match insn with Insn (Some dop, _) -> S.SS.add dop s | _ -> s
@@ -478,7 +477,7 @@ let flowout (i, _) =
 
 \subsection{Interference Graph}
 
-The purpose for conducting dataflow analysis as above is finding variables that may be assigned the same register. This is done by building an interference graph, which is an undirected graph, whose nodes represent variables and edges signify interference between them, i.e. variables \(a\) and \(b\) live at overlapping program points is represented with an edge \((a,b)\).
+The purpose for conducting dataflow analysis as above is finding variables that may be assigned the same register. This is done by building an interference graph, which is an undirected graph, whose nodes represent variables and edges that signify interference between them, i.e. variables \(a\) and \(b\) live at overlapping program points is represented with an edge \((a,b)\).
 
 
 Constructing an interference graph only depends on the \textit{live-out} set and type of instruction. If the instruction defines a variable, said variable is in interference with all variables in the \textit{live-out} set. There is one exception however: according to the Appel text, move instructions (i.e. phi nodes in the case of SSA form) are given special consideration. The purpose of phi nodes is to copy/move a certain value from a certain predecessor, so they are not necessarily in conflict for being live at the same time. Rather it would often benefit if they were assigned the same register to spare unnecessary moves. % TODO: uddyb hvorfor de ikke er i interference?
@@ -488,15 +487,15 @@ Because of this, for any phi node of the form
 \[
   a = \Phi (b_1, ..., b_n)
 \]
-add edges to all \textit{live-out} variables not in \(B\)
+add edges to all \textit{live-out} variables not in \(B\):
 \[
   \forall b_j \in (\mathit{out}[i] \setminus B), \mathit{add\_edge}(a, b_j) \text{ where } B = \{b_1, ..., b_n\}
 \]
-For any other instruction the defines a variable \(a\)
+For any other instruction that defines a variable \(a\)
 \[
-  \forall b_j \in B, \mathit{add\_edge}(a, b_j)
+  \forall b_j \in B, \mathit{add\_edge}(a, b_j).
 \]
-Although the Appel text notes interference with concrete registers as well as overlapping variables, this isn't considered in this implementation.
+Although the Appel text (\cite{tiger}) describes interference of variables with concrete registers as well as overlapping variables, this isn't considered in this implementation.
 
 
 
@@ -518,11 +517,10 @@ Although the Appel text notes interference with concrete registers as well as ov
 %   * george
 %   * welsh-powell?
 \section{Graph Coloring}
-Once an interference graph is constructed, the actual assignments can be found using graph coloring. Although this has long been known to be NP-complete, the heuristic as introduced in both the Appel and Aho et al. texts is a linear time approximation to this problem. It is based on an iterative approach wherein nodes known to be colorable are removed until either an empty graph remains in which case the original graph \(G\) is \(k\)-colorable  or nodes with more than \(k\) neighbours remain, in which case a node is chosen to be spilled to the stack and removed. This is then repeated.
+Once an interference graph is constructed, the actual assignments can be found using graph coloring. Although this has long been known to be NP-complete, the heuristic as introduced in both the Appel and Aho et al. texts is a linear time approximation to this problem. It is based on an iterative approach wherein nodes known to be colorable are removed until either an empty graph remains, in which case the original graph \(G\) is \(k\)-colorable  or nodes with more than \(k\) neighbours remain. In this case a node is chosen to be spilled to the stack and removed. This is then repeated.
 
-Let \(k\) be the number of working registers available on the target architecture. After building the interference graph \(G\), a node \(n\) with fewer than \(k\) neighbors is chosen. As \(n\) has at most \(k-1\) neighbors, it can be removed safely, effectively simplifying \(G\). It is pushed to a stack in order to preserve the order in which they are removed so that \(G\) can be rebuilt and the corresponding registers can be assigned correctly once a \(k\)-colorable assignment is found.
+Let \(k\) be the number of working registers available on the target architecture. After building the interference graph \(G\), a node \(n\) with fewer than \(k\) neighbors is chosen. As \(n\) has at most \(k-1\) neighbors, it can be removed safely, effectively simplifying \(G\). It is pushed to a stack to preserve the order in which they are removed so that \(G\) can be rebuilt and the corresponding registers can be assigned correctly once a \(k\)-colorable assignment is found.
 
-\color{black}
 %  (i.e. \(\mathit{deg}(n) < k\))
 
 %It must hold that \(G-\{n\}\) is \(k\)-colorable if \(G\) is \(k\)-colorable 
@@ -534,10 +532,9 @@ Let \(k\) be the number of working registers available on the target architectur
 \subsection{Coalescing}
 
 
-Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes. \color{mygreen} This is similar to but  not the same as  the lack of interference edges between variables subject to move operations. This is because variables \(a\) and \(b\) may still be assigned different registers or even spilled if,  for instance, either of them are of significant degree. Coalescing joins nodes \(a\) and \(b\) to node \(ab\) preserving the edges of both to maintain soundness.
+Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes.  This is similar to but  not the same as  the lack of interference edges between variables that are subject to move operations. This is because variables \(a\) and \(b\) may still be assigned different registers or even spilled if,  for instance, either of them are of significant degree. Coalescing joins nodes \(a\) and \(b\) to node \(ab\) preserving the edges of both to maintain soundness.
 
-Since all edges are preserved, the resulting node \(an\) may be of a much higher degree. Because to this, only strategies that produce a \(k\)-colorable graph are worth considering as worth considering as additional spills negate the purpose entirely.
-\color{black}
+Since all edges are preserved, the resulting node \(ab\) may be of a much higher degree. Because of this, only strategies that produce a \(k\)-colorable graph are worth considering, as additional spills negate the purpose entirely.
 
 \section{Linear Scan}
 
@@ -548,7 +545,7 @@ Since all edges are preserved, the resulting node \(an\) may be of a much higher
 %Keywords: program points, dataflow equations, fixed point
 
 
-
+% TODO: find ud af om man skal henvise til kurser på au på speciel form
 
 %* todo: ssa/llvm vs appel analysis
 %* henvis til blog posts som archive
@@ -643,9 +640,7 @@ An example of this would be the division/remainder operation: since integer divi
 
 \subsection{Asserting correctness}
 
-\color{mygreen}
-Validating the correctness of each instruction translation is a complicated task given how low-level it is. One approach is attaching a debugger and examining the state before and after the translated sequence of x86 instructions is executed. The result of applying a binary operation should only affect the assigned register, for instance.
-\color{black}
+Validating the correctness of each instruction translation is a complicated task given how low-level it is. One approach is attaching a debugger and examining the state before and after the translated sequence of x86 instructions is executed. The result of applying a binary operation,  for instance, should only affect the assigned register.
 
 \section{Further Optimization}
 
