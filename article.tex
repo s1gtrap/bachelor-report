@@ -289,6 +289,7 @@ While each block has 0-2 immediate successors, the amount of predecessors is unb
 
 
 
+% FIXME: introducer phi nodes og nævn dominators i CFA afsnittet
 
 
 
@@ -347,7 +348,9 @@ which can greatly reduce performance, but  allows for translation in constant ti
 \newpage
 \subsection{Dataflow Analysis}
 
-Another approach, which is a much more precise approximation, is a specific variant of the dataflow analysis as described in \textit{Modern Compiler Implementation in ML} (\cite{tiger}) and \textit{Compilers: Principles, Techniques, and Tools} (\cite{dragon}). In general, dataflow analysis is the process of finding the possible paths in which data may propagate through different branches of execution.  While several applications of this exist (like constant propagation, reaching defnitions, available expressions etc.), one that is immediately beneficial in the case of liveness analysis is one that traverses a CFG in the reverse order of execution (i.e.  \textit{backwards} flow), and extracts any variable that \textit{may} be used in execution (also referred to as \textit{backwards may} analysis).
+% FIXME: beskriv use, def osv. sets tidligere!
+
+Another approach, which is a much more precise approximation, is a specific variant of the dataflow analysis as described in \textit{Modern Compiler Implementation in ML} (\cite{tiger}) and \textit{Compilers: Principles, Techniques, and Tools} (\cite{dragon}). In general, dataflow analysis is the process of finding the possible paths in which data may propagate through different branches of execution.  While several applications of this exist (like constant propagation, reaching defnitions, available expressions etc.), one that is immediately beneficial in the case of liveness analysis is one that traverses a CFG in the reverse order of execution (i.e.  \textit{backwards} flow), and extracts any variable that \textit{may} be used in execution (also referred to as \textit{backwards may} analysis). % FIXME: forklar hvorfor List.rev ikke udgør backwards flow
 
 This algorithm calculates which program points each variable may be accessed from with some conservative constraints known to maintain correctness. Specifically, these are the transfer and control-flow constraints. %, the former of which must satisfy a transfer function a
 
@@ -395,9 +398,47 @@ Initially, two sets are associated with each instruction: the \textit{live-in} a
 
 %The purpose of liveness analysis is to determine which variables are live at which program point, which in turn is used to 
 
-\subsubsection{Implementation}
+%\subsubsection{Implementation}
 
-The \texttt{dataflow} function takes a list of instructions \texttt{insns}, an array of CFG vertices \texttt{ids} as well as the CFG \texttt{g}. The \(i\)th element of \texttt{ids} is the CFG vertex corresponding to the \(i\)th entry of \texttt{insns}. The decision to use arrays instead of pairing up each instruction with both \textit{live-in} and \textit{live-out} sets was made because of the \textit{live-out} equation \eqref{flowout} that needs to find all \textit{live-out} sets of the successor blocks. Hence random access arrays were chosen instead of linear search.
+The simplest ones to implement are the \lstinline!def! and \lstinline!use! functions, as all of the values of interest are located immediately within the instruction itself and not hidden behind some layer of indirection:
+\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let def (s : S.SS.t) (insn : Cfg.insn) =
+  match insn with Insn (Some dop, _) -> S.SS.add dop s | _ -> s
+
+let use (s : S.SS.t) (insn : Cfg.insn) =
+  let op o s = match o with Ll.Id i -> S.SS.add i s | _ -> s in
+  let po s o = op o s in
+  match insn with
+  | Insn (_, AllocaN (_, (_, o)))
+  | Insn (_, Bitcast (_, o, _))
+  | Insn (_, Load (_, o))
+  | Insn (_, Ptrtoint (_, o, _))
+  | Insn (_, Sext (_, o, _))
+  | Insn (_, Trunc (_, o, _))
+  | Insn (_, Zext (_, o, _)) ->
+      op o s
+  | Insn (_, Binop (_, _, l, r))
+  | Insn (_, Icmp (_, _, l, r))
+  | Insn (_, Store (_, l, r)) ->
+      op l s |> op r
+  | Insn (_, Call (_, _, args)) -> List.map snd args |> List.fold_left po s
+  | Insn (_, Gep (_, bop, ops)) -> List.fold_left po (op bop s) ops
+  | Insn (_, Select (c, (_, l), (_, r))) -> op c s |> op l |> op r
+  | Insn (_, PhiNode (_, ops)) -> List.map fst ops |> List.fold_left po s
+  | Term (Ret (_, Some o) | Cbr (o, _, _)) -> op o s
+  | _ -> s
+\end{minted}
+Where \lstinline!S.SS! is a \lstinline!Set.S! module built over the \lstinline!symbol! type found in \lstinline!lib/symbol.ml!:
+\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+type symbol = string * int
+(* ... *)
+module SS = Set.Make (struct
+  type t = symbol
+  let compare (_, n1) (_, n2) = compare n1 n2
+end)
+type set = SS.t
+\end{minted}
+With the actual fixed-point iteration performed as follows:
 \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
 let dataflow (insns : Cfg.insn list) (ids : Cfg.G.V.t array) (g : Cfg.G.t) =
   let insns = List.mapi (fun i v -> (i, v)) insns |> List.rev in
@@ -419,18 +460,7 @@ let flowin (i, insn) =
   if changed then in_.(i) <- newin;
   changed
 \end{minted}
-Where \lstinline!S.SS! is a \lstinline!Set.S! module built over the \lstinline!symbol! type found in \lstinline!lib/symbol.ml!:
-
-\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
-type symbol = string * int
-(* ... *)
-module SS = Set.Make (struct
-  type t = symbol
-  let compare (_, n1) (_, n2) = compare n1 n2
-end)
-type set = SS.t
-\end{minted}
-
+And the \texttt{flowout} function which correponds to the \textit{live-out} equation \eqref{flowout} implemented as follows:
 \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
 let flowout (i, _) =
   let newout =
