@@ -211,7 +211,7 @@ The primary sources will be \textit{Modern Compiler Implementation in ML} \paren
 
 %The two primary sources are the \textit{Modern Compiler Implementation in ML} \cite{tiger} and Dragonbook \cite{dragon}, in addition to scientific publications concerning the linear scan approach.
 
-
+\newpage
 
 \section{Control Flow Analysis}
 
@@ -220,68 +220,26 @@ The primary sources will be \textit{Modern Compiler Implementation in ML} \paren
 
 
 The backend of a compiler takes some form of IR as input, usually a linear sequence of instructions for each separate function. This representation is close to the level of an actual processor by design, but it isn't immediately useful for the further analysis steps needed to generate optimized code for the target architecture. %%(FIXME: why not?)
-The control flow of a given program refers to the order in which instructions are executed. While the flow of most instructions is linear, in the sense that the next instruction executed is located immediately after, some transfer the flow of execution elsewhere or even terminate it. %% FIXME: why is this important?
+The control flow of a given program refers to the order in which instructions are executed. While the flow of most instructions is linear, in the sense that the next instruction executed is located immediately after, some transfer the flow of execution elsewhere or terminate it. %% FIXME: why is this important?
 
 % mention basic block early on, they're a contiguous sequence of instructions that do not transfer control flow
 
-A continuous flow of instructions is referred to as a \textit{basic block}, defined as a sequence of instructions with no branches in or out except for the first instruction (referred to as a \textit{leader}, immediately following either the function entry or label) and the last (referred to as a \textit{terminator}, as it either terminates or transfers the flow of execution). %These are often referred to as terminators and can be thought of as an entirely different categoriy of instructions. % TODO: måske drop 'can be thought of'
+A continuous flow of instructions is referred to as a \textit{basic block}, defined as a sequence of instructions with no branches in or out except for the first instruction (referred to as a \textit{leader}, immediately following either the function entry or label within it) and the last (referred to as a \textit{terminator}, as it either terminates or transfers the flow of execution). %These are often referred to as terminators and can be thought of as an entirely different categoriy of instructions. % TODO: måske drop 'can be thought of'
+In order to represent the order in which instructions are executed, a \textit{control flow graph} (CFG) is introduced. It is a directed graph whose edges represent transfer of control. The type of node varies over the source material, with CFGs of the Appel test constructed over individual instructions (\cite{tiger}) and the Aho text over basic blocks (\cite{dragon}).
+Either way leaders may have some predecessors and terminators some successors associated with them.
 
-Basic blocks represent a single node in a \textit{control flow graph} (CFG), which is a directed graph whose edges denote transfer of  control flow. The unconditional branch terminator always transfers control flow to the block labelled, meaning only one successor will follow, whereas conditional branching could transfer to either of the two, but because control flow analysis is not concerned with data, it simply adds both as successors. % TODO: rets 
-While each block has 0-2 immediate successors, the amount of predecessors is unbounded as the amount of branches targeting a specific leader is unlimited.
+Terminators have one or two successors in the case of branching or none at all in the case of function exit. % These can either be associated basic blocks or individual instructions that make it up.
+Unconditional branching always transfers control flow to the block labelled, meaning only one successor follows, whereas conditional branching could transfer to either of the two, but because control flow analysis is not concerned with data, both are considered as possible successors. % TODO: rets 
 
-\begin{figure}[h]
-  \centering
-  \begin{subfigure}{0.48\textwidth}
-  \centering
-  \begin{tikzpicture}
-    \node [cbox, font=\ttfamily\tiny, align=left] (cfa) at (0,0) {define i32 @square(i32 \%0) \{\\1:\\\ \%2 = icmp sgt i32 \%0, 0\\\ br i1 \%2, label \%3, label \%9\ ; succs = \%3, \%9\\3:\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ; preds = \%1, \%3\\\ \%4 = phi i32 [ \%0, \%1 ], [ \%7, \%3 ]\\\ \%5 = phi i32 [ 0, \%1 ], [ \%6, \%3 ]\\\ \%6 = add i32 \%5, \%0\\\ \%7 = sub i32 \%4, 1\\\ \%8 = icmp ugt i32 \%7, 0\\\ br i1 \%8, label \%3, label \%9\ ; succs = \%3, \%9\\9:\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ; preds = \%3, \%1\\\ \%10 = phi i32 [ 0, \%1 ], [ \%6, \%3 ]\\\ ret i32 \%10\\\}};
-  \end{tikzpicture}
-  \end{subfigure}
-  \begin{subfigure}{0.48\textwidth}
-  \centering
-  \begin{tikzpicture}
-    \node [cbox, font=\ttfamily\tiny, align=left] (a) at (0,0) {1:\\\ \%2 = icmp sgt i32 \%0, 0\\\ br i1 \%2, label \%3, label \%9\ \ \ \ \ \ \ };
-    \node [cbox, font=\ttfamily\tiny, align=left, below=0.5cm of a] (b) {3:\\\ \%4 = phi i32 [ \%0, \%1 ], [ \%7, \%3 ]\\\ \%5 = phi i32 [ 0, \%1 ], [ \%6, \%3 ]\\\ \%6 = add i32 \%5, \%0\\\ \%7 = sub i32 \%4, 1\\\ \%8 = icmp ugt i32 \%7, 0\\\ br i1 \%8, label \%3, label \%9};
-    \node [cbox, font=\ttfamily\tiny, align=left, below=0.5cm of b] (c) {9:\\\ \%10 = phi i32 [ 0, \%1 ], [ \%6, \%3 ]\\\ ret i32 \%10};
+Successors of node \(n\) are denoted
+\[
+  \mathit{succ}[n],
+\]
+and while each node also has predecessors associated, which consist of an  unbounded number of nodes from which cotrol may be transferred, it isn't particularly useful in the following analysis.
 
-    \node[right= 1cm of a.south, invisible] (ac1)  {};
-    \node[below= 0.166667cm of ac1, invisible] (ac2)  {};
-    \node[right= 1.333333cm of ac2, invisible] (ac3)  {};
-    \node[right= 1cm of c.north, invisible] (ac6)  {};
-    \node[above= 0.166667cm of ac6, invisible] (ac5)  {};
-    \node[right= 1.333333cm of ac5, invisible] (ac4)  {};
+%Basic blocks represent a single node in a \textit{control flow graph} (CFG), which is a directed graph whose edges denote transfer of  control flow.
+%The unconditional branch terminator always transfers control flow to the block labelled, meaning only one successor will follow, whereas conditional branching could transfer to either of the two, but because control flow analysis is not concerned with data, it simply adds both as successors. % TODO: rets 
 
-    \node[right= 1cm of b.north, invisible] (bb1)  {};
-    \node[above= 0.166667cm of bb1, invisible] (bb2)  {};
-    \node[right= 1.166667cm of bb2, invisible] (bb3)  {};
-    \node[right= 1cm of b.south, invisible] (bb6)  {};
-    \node[below= 0.166667cm of bb6, invisible] (bb5)  {};
-    \node[right= 1.166667cm of bb5, invisible] (bb4)  {};
-
-    %\node[right=2.5cm of ab, invisible] (abr)  {};
-    %\node[right=2.5cm of bc, invisible] (bcr)  {};
-  \draw [-latex] (a) -- (b);
-  %\draw [-latex] (a) to[out=-15,in=15] (c);
-  \draw [-latex] (b) -- (c);
-
-
-  \draw          (ac1.center) -- (ac2.center) -- (ac3.center) -- (ac4.center) -- (ac5.center);
-  \draw [-latex] (ac5.center) -- (ac6.center);
-
-  \draw          (bb2.center) -- (bb3.center) -- (bb4.center) -- (bb5.center) -- (bb6.center);
-  \draw [-latex] (bb2.center) -- (bb1.center);
-  %\draw [-latex] (c.north) to[bend right=1000] (b.north);
-  %\draw  (a.south) to  (ab);
-  %\draw  (ab) to  (abr);
-  %\draw  (abr) to  (bcr);
-  %\draw  (bcr) to  (bc);
-  %\draw  (ab) to  (bc);
-  %\draw [-latex]  (bc) to [out=180,in=70] (c.north);
-  \end{tikzpicture}
-  \end{subfigure}
-  \hfill
-  \caption{CFG of \lstinline!@square! of \lstinline!square.ll!} % FIXME: not entirely correct (square.ll is @main)
-\end{figure}
 
 %These instructions are referred to as \textit{terminators}, as they potentially terminate a contiguous flow of execution. This subset of instructions can be further divided into \textit{branch instructions} and those concerned with handling the callstack in function/subroutine management.
 
@@ -299,9 +257,9 @@ While each block has 0-2 immediate successors, the amount of predecessors is unb
 
 \subsection{Building a graph}
 
-\subsection{Parameterized over individual instructions}
+%\subsection{Parameterized over individual instructions}
 
-\subsection{Parameterized over basic blocks}
+%\subsection{Parameterized over basic blocks}
 
 
 With an input stream of instructions 
@@ -321,20 +279,20 @@ Each function defined in an LLVM program is constructed with the help of
 %
 %  TODO: comment on interrupts
 
-Translating IR with an unbounded number of variables to a CPU with a bounded number of registers involves the process of assigning each variable a register such that no value that can be used in the future is overwritten. %Therefore, any variable that may be used in the future is considered \textit{live}, and said to be in interference with any other variable live at any intersecting point.
-Variables that are in use at a given program point are considered \textit{'live'}, and although variables can be assigned the same register, %if they are not in interference
+Translating IR with an unbounded number of variables to a CPU with a bounded number of registers involves the process of assigning each variable a register such that no value that may be needed in the future is overwritten. %Therefore, any variable that may be used in the future is considered \textit{live}, and said to be in interference with any other variable live at any intersecting point.
+Variables that are in use at a given program point are considered \textit{live}, and although variables can be assigned the same register, %if they are not in interference
 variables that are live at the same time (i.e. at intersecting program points) cannot, in which case they are also said to be in interference with one another.
  Variables that are not in interference can be assigned the same register, and finding the precise points at which any variable is live is trivial for linear sequences of instructions. However, when conditional branching is introduced, deriving the path of execution becomes undecidable because of the halting problem. % TODO: finish this sentence
 
-Suppose a function that calls another:
+For instance, suppose a function that calls another:
 
-\begin{lstlisting}[language=LLVM,firstnumber=1]
+\begin{minted}[linenos,bgcolor=LightGray]{llvm}
 define i32 @countcall(i32 %x0) {
   %x1 = add i32 %x0, 1
   call ptr @subproc()
   ret i32 %x1
 }
-\end{lstlisting}
+\end{minted}
 Because of the halting problem, static analysis cannot determine if the call to \lstinline!@subproc! will return for every possible implementation.  %which may or may not return control to the calling function:
  So when assigning \lstinline!%x1! a register it is undecidable whether the variable must be live in the last return instruction, i.e. needs to live across the call to another function which can overwrite several registers depending on calling conventions. Because of this, any sound approach to liveness analysis will be an approximation.
 
@@ -343,22 +301,22 @@ Because of the halting problem, static analysis cannot determine if the call to 
 
 A sound albeit very naive approach is to consider every variable live at every program point, such that every variable is in interference with one another, producing a fully connected interference graph. % FIXME: find a place for: This generally isn't a very performant approach in terms of execution 
 Such a heuristic is greedy in the sense that it picks an assignment known to be safe for the least amount of preprocessing work possible. However, this can be a very inefficient assignment at runtime: a number of \(n\)  variables greater than \(k\) working registers causes \(n-k\) variables to be spilled to memory, % TODO: skal der stå stack?
-which can greatly reduce performance, but  allows for translation in constant time. %FIXME: is this even true?
+which can greatly reduce performance, but  allows for translation in linear time. %FIXME: is this even true?
 
-\newpage
 \subsection{Dataflow Analysis}
 
 % FIXME: beskriv use, def osv. sets tidligere!
 
-Another approach, which is a much more precise approximation, is a specific variant of the dataflow analysis as described in \textit{Modern Compiler Implementation in ML} (\cite{tiger}) and \textit{Compilers: Principles, Techniques, and Tools} (\cite{dragon}). In general, dataflow analysis is the process of finding the possible paths in which data may propagate through different branches of execution.  While several applications of this exist (like constant propagation, reaching defnitions, available expressions etc.), one that is immediately beneficial in the case of liveness analysis is one that traverses a CFG in the reverse order of execution (i.e.  \textit{backwards} flow), and extracts any variable that \textit{may} be used in execution (also referred to as \textit{backwards may} analysis). % FIXME: forklar hvorfor List.rev ikke udgør backwards flow
+Another approach, which is a much more precise approximation, is a specific variant of the dataflow analysis as described in \textit{Modern Compiler Implementation in ML} (\cite{tiger}) and \textit{Compilers: Principles, Techniques, and Tools} (\cite{dragon}). In general, dataflow analysis is the process of finding the possible paths in which data may propagate through various branches of execution.  While several applications of this exist (like constant propagation, reaching defnitions, available expressions etc.), one that is immediately beneficial in the case of liveness analysis is one that traverses a CFG in the reverse order of execution (i.e.  \textit{backwards} flow), and extracts any variable that \textit{may} be used in execution (also referred to as \textit{backwards may} analysis). % FIXME: forklar hvorfor List.rev ikke udgør backwards flow
 
 This algorithm calculates which program points each variable may be accessed from with some conservative constraints known to maintain correctness. Specifically, these are the transfer and control-flow constraints. %, the former of which must satisfy a transfer function a
-
 The transfer constraint is based on a \textit{transfer function} that describes how liveness is affected across instructions. For each instruction, there is a transfer function that describes how liveness changes from one point to the one immediately after. For example, as an arithmetic operation needs to be assigned a new temporary variable, the liveness of a new variable is propagated to all  instructions  executed subsequently. This is done by applying the transfer function to the current \textit{live-out} set to stop further propagation of variables defined by the currently visited instruction. % TODO: In fact, because the IR is in SSA form, the only time 
 \begin{align}\label{flowin}
   \mathit{in}\left[n\right] &= \mathit{use}\left[n\right] \cup (\mathit{out}\left[n\right] - \mathit{def}\left[n\right])
 \end{align}
-Control-flow constraints on the other hand propagate the use of variables to previously executed instructions, expecting these to be defined somewhere further up the CFG. This is done by propagating the union of the \textit{live-in} set associated with all immediate successor nodes. This is also referred to as the \textit{meet operator}, whose operator depends on the type of dataflow alanysis as well, but for liveness analysis a union is performed on the previos \textit{live-in} variables.
+with the \(\mathit{use}[n]\) set being defined as any variables that may be used and the \(\mathit{def}[n]\) as the set of variables defined in node \(n\). Because the chosen IR is in SSA form the \(\mathit{def}[n]\) either consists of one variable or equal to \(\emptyset\). The  \(\mathit{use}[n]\) set is effectively unbounded as some instructions take any \(m\) variables as parameters.
+
+Control-flow constraints on the other hand propagate the use of variables to previously executed instructions, expecting these to be defined somewhere further up the CFG. This is done by propagating the union of the \textit{live-in} set associated with all immediate successor nodes. This is also referred to as the \textit{meet operator}, whose operator depends on the type of dataflow analysis as well, but for liveness analysis a union is performed on the previos \textit{live-in} variables.
 \begin{align}\label{flowout}
   \mathit{out}\left[n\right] &= \bigcup_{s\in \mathit{succ}\left[n\right]} \mathit{in}\left[s\right]
 \end{align}
@@ -367,7 +325,7 @@ Control-flow constraints on the other hand propagate the use of variables to pre
 %The dataflow analysis approach builds the set of variables that 
 %Each type of instruction has some semantic attributes that are applied to the system state upon execution. This change is also referres to as a \textit{transfer function} as it transitions from one state to another.
 %can be thought of as a \textit{transfer function} in terms of liveness, denoting which variables may be live before and after execution.
-Initially, two sets are associated with each instruction: the \textit{live-in} and \textit{live-out} sets, which are the sets of variables that are live respectively before and after execution. Then the following two equations are applied iteratively until a fixed point is reached, i.e. a point in which neither \(\mathit{in}[n]\) or \(\mathit{out}[n]\) is changed for all \(n\) instructions.
+Initially, two sets are associated with each instruction: the \textit{live-in} and \textit{live-out} sets, which are the sets of variables that are live respectively before and after execution. Then the two equations above are applied iteratively until a fixed point is reached, i.e. an invariant point where neither \(\mathit{in}[n]\) or \(\mathit{out}[n]\) is changed for all instructions \(n\).
 
 % TODO: onwards!
 
@@ -608,7 +566,7 @@ The branching for most of these is trivial: after successful execution the flow 
 Because of this, these instructions are referred to as \textit{terminators}, as their purpose is to disrupt what had otherwise been a linear flow from the beginning of this continus sequence of instructions, henceforth referred to as a \textit{basic block}.
 
 %%%
-\subsection{Translating to x86}
+\subsection{Translating \lstinline!LLVM--! to x86}
 
 Translating each IR instruction to x86 correctly is a matter of eliminating unintended side-effects. Each LLVM-- instruction is defined to have only one purpose, %% FIXME is purpose the right word?
 as concepts such as calling conventions, stack frames, or a \lstinline!FLAGS! register are completely abstracted over in order to remain platform independent.
