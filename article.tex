@@ -34,6 +34,7 @@
 \usepackage{nicematrix}
 \usepackage{collcell}
 \usepackage{varwidth}
+\usepackage{booktabs}
 
 \definecolor{LightGray}{gray}{0.97}
 
@@ -197,13 +198,15 @@ Compilation refers to the process of translating from one language to another, m
 Most operations of a general-purpose programming language are translated to a set of control, logic, and arithmetic instructions to be executed sequentially on a computer processor: a single circuit/chip, referred to as the \textit{central processing unit} (CPU), the design of which has varied and evolved over time.
 
 Most CPUs are \textit{register machines}, in that they use a limited set of \textit{general-purpose registers} (GPRs) to store working values in combination with \textit{random access memory} (RAM) for mid-term, and other I/O peripherals for long-term storage. This can largely be attributed to performance, as register machines routinely outperform \textit{stack machines} \parencite{ShiYunhe2008VmsS} that are often used in VMs.
-Although register machines generally also have a stack available, as being limited to mere bytes of storage is simply unfeasible for most large scale applications, using it compared to GPRs is several orders of magnitude slower.
+Although register machines generally also have a stack available, as being limited to mere bytes of storage is simply infeasible for most large scale applications, using it compared to GPRs is several orders of magnitudes slower.
 Because of this, a crucial part of the backend stage for an optimizing compiler is assigning each variable  of the source program to a GPR in such a way that maximizes performance without sacrificing correctness.
 
 
 
 The process of assigning each variable to a GPR is referred to as \textit{register allocation}, and can be approached in several different ways. This paper will seek to implement graph coloring and linear scan and evaluate them in terms of runtime performance after compilation. %% TODO: compare with time-complexity/compile-time duration?
 The primary sources will be \textit{Modern Compiler Implementation in ML} \parencite{tiger} and \textit{Compilers: Principles, techniques, and tools} \parencite{dragon}, in addition to publications concerning the linear scan approach.
+
+The implementation is written in OCaml for the most part, although there is some marginal use of Python to interact with the LLDB debugger.
 
 
 %* overfladisk intro til hvad helvede register allokering er og hvorfor
@@ -218,7 +221,58 @@ The primary sources will be \textit{Modern Compiler Implementation in ML} \paren
 
 %The two primary sources are the \textit{Modern Compiler Implementation in ML} \cite{tiger} and Dragonbook \cite{dragon}, in addition to scientific publications concerning the linear scan approach.
 
-\newpage
+
+\section{Intermediate Representation}
+
+
+Although compilers can feasibly translate from the source language to machine code of the target platform directly, and doing so could even be more efficient, doing so hinders the portability as machine code targeting architecture \(A\) isn't necessarily useful for targeting architecture \(B\) further down the line.
+
+Instead of translating directly from a source language to target machine code, most compiler frontends emit IR which is intended as an abstraction over particular CPU implementations. % FIXME: er det korrekt? lol
+It is by no means executable on either \(A\) or \(B\) but is more often than not much closer to the abstract level of a CPU than the source language originally fed to the frontend.  This helps portability immensely, as a frontend emitting an IR no longer needs to specialize to a particular architecture, instead it can target as many as the backend supports.
+Likewise, a compiler backend will support any frontend provided that they emit correct IR.
+
+Because of this, compilation of high-level programming languages will often go no further than emitting IR, then leave the rest for a subsequent backend toolchain. This naturally leads to the LLVM toolchain, which is by far the most used compiler backend. Most languages, if targeting native execution on a CPU, will have an LLVM implementation. This is true for C and C++ (clang and clang++ respectively), D (with the ldc compiler), Swift and Rust, to name a few.
+
+Conversely, managed languages such as Java and C# typically don't depend on the LLVM toolchain directly, research projects that attempt to compile associated VM bytecode to a native platform using LLVM.
+
+The modularization of the frontend and backend stages also help immensely.
+
+\begin{figure}[!ht]
+   \begin{minipage}{0.48\textwidth}
+     \centering
+     \begin{minted}[bgcolor=LightGray]{c}
+int add(int a, int b) {
+  int sum = a + b;
+  return sum;
+}
+     \end{minted}
+     \caption{Arithmetic function implemented in C}\label{fig:addc}
+   \end{minipage}\hfill
+   \begin{minipage}{0.48\textwidth}
+     \centering
+     \begin{minted}[bgcolor=LightGray]{llvm}
+define i32 @add(i32 %a, i32 %b) {
+  %sum = add i32 %a, %b
+  ret i32 %sum
+}
+     \end{minted}
+     \caption{Corresponding represented in LLVM}\label{fig:addll}
+   \end{minipage}
+   \begin{center}
+   \begin{minipage}{0.48\textwidth}
+     \centering
+     \begin{minted}[bgcolor=LightGray]{gas}
+  .globl _add
+_add:
+  movl	%edi, %eax
+  addl	%esi, %eax
+  retq
+     \end{minted}
+     \caption{Prettified result of \mintinline{bash}{clang -O0}}\label{fig:addx86}
+   \end{minipage}
+   \end{center}
+\end{figure}
+
 
 \section{Control Flow Analysis}
 
@@ -259,14 +313,20 @@ and while each node also has predecessors associated, which consist of an  unbou
 
 %hence a \textit{control flow graph} is derived from these. A terminator will branch elsewhere to continue execution. The destination of this has to be an annotated by a label, hence labels \textit{initiate} blocks.
 
-\subsection{Building a graph}
+\subsection{Building a CFG}
 
 %\subsection{Parameterized over individual instructions}
 
 %\subsection{Parameterized over basic blocks}
 
 
-With an input stream of instructions 
+Building a graph is relatively straight forward, with the input for every function declared parsed into a tuple type \mintinline{ocaml}{cfg}  of the form:
+\begin{center}
+\begin{minted}{ocaml}
+type cfg = (lbl option * block) * (lbl * block) list
+\end{minted}
+\end{center}
+which consists of an optionally named entry block in the first part and a list of trailing blocks that are always named in the second.
 
 %* description of blocks, how they connect etc.
 
@@ -316,7 +376,7 @@ which can greatly reduce performance, but  allows for translation in linear time
 
 % FIXME: beskriv use, def osv. sets tidligere!
 
-Another approach, which is a much more precise approximation, is a specific variant of the dataflow analysis as described in \textit{Modern Compiler Implementation in ML} (\cite{tiger}) and \textit{Compilers: Principles, Techniques, and Tools} (\cite{dragon}). In general, dataflow analysis is the process of finding the possible paths in which data may propagate through various branches of execution.  While several applications of this exist (like constant propagation, reaching defnitions, available expressions etc.), one that is immediately beneficial in the case of liveness analysis is one that traverses a CFG in the reverse order of execution (i.e.  \textit{backwards} flow), and extracts any variable that \textit{may} be used in execution (also referred to as \textit{backwards may} analysis). % FIXME: forklar hvorfor List.rev ikke udgør backwards flow
+Another approach, which is a more precise approximation, is a specific variant of the dataflow analysis as described in \textit{Modern Compiler Implementation in ML} (\cite{tiger}) and \textit{Compilers: Principles, Techniques, and Tools} (\cite{dragon}). In general, dataflow analysis is the process of finding the possible paths in which data may propagate through various branches of execution.  While several applications of this exist (like constant propagation, reaching defnitions, available expressions etc.), one that is immediately beneficial in the case of liveness analysis is one that traverses a CFG in the reverse order of execution (i.e.  \textit{backwards} flow), and extracts any variable that \textit{may} be used in execution (also referred to as \textit{backwards may} analysis). % FIXME: forklar hvorfor List.rev ikke udgør backwards flow
 
 This algorithm calculates which program points each variable may be accessed from with some conservative constraints known to maintain correctness. Specifically, these are the transfer and control-flow constraints. %, the former of which must satisfy a transfer function a
 The transfer constraint is based on a \textit{transfer function} that describes how liveness is affected across instructions. For each instruction, there is a transfer function that describes how liveness changes from one point to the one immediately after. For example, as an arithmetic operation needs to be assigned a new temporary variable, the liveness of a new variable is propagated to all  instructions  executed subsequently. This is done by applying the transfer function to the current \textit{live-out} set to stop further propagation of variables defined by the currently visited instruction. % TODO: In fact, because the IR is in SSA form, the only time 
@@ -374,19 +434,11 @@ let def (s : S.SS.t) (insn : Cfg.insn) =
 
 let use (s : S.SS.t) (insn : Cfg.insn) =
   let op o s = match o with Ll.Id i -> S.SS.add i s | _ -> s in
-  let po s o = op o s in
+  let po = Fun.flip op in
   match insn with
-  | Insn (_, AllocaN (_, (_, o)))
-  | Insn (_, Bitcast (_, o, _))
-  | Insn (_, Load (_, o))
-  | Insn (_, Ptrtoint (_, o, _))
-  | Insn (_, Sext (_, o, _))
-  | Insn (_, Trunc (_, o, _))
-  | Insn (_, Zext (_, o, _)) ->
+  | Insn (_, AllocaN (_, (_, o))) (* | Bitcast _ | ... | Zext _ *) ->
       op o s
-  | Insn (_, Binop (_, _, l, r))
-  | Insn (_, Icmp (_, _, l, r))
-  | Insn (_, Store (_, l, r)) ->
+  | Insn (_, Binop (_, _, l, r)) (* | Icmp _ | Store _ *) ->
       op l s |> op r
   | Insn (_, Call (_, _, args)) -> List.map snd args |> List.fold_left po s
   | Insn (_, Gep (_, bop, ops)) -> List.fold_left po (op bop s) ops
@@ -456,11 +508,11 @@ Because of this, for any phi node of the form
 \]
 add edges to all \textit{live-out} variables not in \(B\):
 \[
-  \forall b_j \in (\mathit{out}[i] \setminus B), \mathit{add\_edge}(a, b_j) \text{ where } B = \{b_1, ..., b_n\}
+  \forall b_j \in \mathit{out}[i] \setminus \{b_1, ..., b_n\}, \text{add\_edge}(a, b_j)
 \]
 For any other instruction that defines a variable \(a\)
 \[
-  \forall b_j \in B, \mathit{add\_edge}(a, b_j).
+  \forall b_j \in \{b_1, ..., b_n\}, \text{add\_edge}(a, b_j).
 \]
 Although the Appel text (\cite{tiger}) describes interference of variables with concrete registers as well as overlapping variables, this isn't considered in this implementation.
 
@@ -504,7 +556,14 @@ Coalescing is the process of eliminating moves/copies of data from one GPR to an
 Since all edges are preserved, the resulting node \(ab\) may be of a much higher degree. Because of this, only strategies that produce a \(k\)-colorable graph are worth considering, as additional spills negate the purpose entirely.
 
 \section{Linear Scan}
+Another approach that does not depend on liveness analysis i the linear scan algorithm.
+It is a simple and efficient approach that performs a linear pass over IR to produce a register assignment significantly faster than all of the steps involved with graph coloring.
 
+The primary text is \textit{Linear Scan Register Allocation} (\cite{linear}), the execution of which also relies on prior liveness analysis.
+
+
+% TODO: find ud af hvad binpacking er
+%
 %Write about Appel book.
 
 %Write about SSA form liveness analysis. 
@@ -682,54 +741,57 @@ Each \lstinline!.ll! file present in the \lstinline!benches! directory is listed
 
 \subsubsection{\lstinline!benches/fib.ll!}
 The 'dumb' fib is a very naive approach to finding the \(n\)th number of the Fibonacci sequence by calling itself recursively twice (decrementing \(n\) before each), which causes an exponential growth in function calls.
+\begin{table}[!h]
 \begin{center}
-\begin{NiceTabular}{>{\columncolor{gray!10}}ccccccccc}
-\rowcolor{gray!10}n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
-20 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.23& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.23& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.23& \cellcolor[rgb]{0.8056640625,0.9990234375,0.75} 1.23& \cellcolor[rgb]{0.8056640625,0.9990234375,0.75} 1.22& \cellcolor[rgb]{0.8056640625,0.9990234375,0.75} 1.22& \cellcolor[rgb]{0.9990234375,0.9912109375,0.75} 2.23\\
-21 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8173828125,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.81640625,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.8173828125,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.8212890625,0.9990234375,0.75} 1.29& \cellcolor[rgb]{0.81640625,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.81640625,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.9990234375,0.9853515625,0.75} 2.44\\
-22 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.82421875,0.9990234375,0.75} 1.30& \cellcolor[rgb]{0.8232421875,0.9990234375,0.75} 1.29& \cellcolor[rgb]{0.8232421875,0.9990234375,0.75} 1.30& \cellcolor[rgb]{0.8212890625,0.9990234375,0.75} 1.29& \cellcolor[rgb]{0.8232421875,0.9990234375,0.75} 1.30& \cellcolor[rgb]{0.8232421875,0.9990234375,0.75} 1.29& \cellcolor[rgb]{0.9990234375,0.9794921875,0.75} 2.63\\
-23 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.8310546875,0.9990234375,0.75} 1.33& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.9990234375,0.9755859375,0.75} 2.75\\
-24 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.833984375,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.833984375,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.8349609375,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.8330078125,0.9990234375,0.75} 1.33& \cellcolor[rgb]{0.8330078125,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.8486328125,0.9990234375,0.75} 1.40& \cellcolor[rgb]{0.9990234375,0.97265625,0.75} 2.83\\
-25 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.9990234375,0.970703125,0.75} 2.89\\
-26 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8486328125,0.9990234375,0.75} 1.40& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.92\\
-27 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.96\\
-28 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.845703125,0.9990234375,0.75} 1.38& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.97\\
-29 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.98\\
-30 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8349609375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8349609375,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8330078125,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.8330078125,0.9990234375,0.75} 1.33& \cellcolor[rgb]{0.8349609375,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.91\\
-31 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.98\\
-32 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.38& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.38& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
-33 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.38& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
-34 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.38& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
-35 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
-36 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
+\begin{NiceTabular}{|c|cccccccc|}
+\hline
+n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
+\hline
+8 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7529296875,0.9990234375,0.75} 1.01248x& \cellcolor[rgb]{0.75390625,0.9990234375,0.75} 1.01766x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00146x& \cellcolor[rgb]{0.7548828125,0.9990234375,0.75} 1.02261x& \cellcolor[rgb]{0.7509765625,0.9990234375,0.75} 1.00606x& \cellcolor[rgb]{0.7529296875,0.9990234375,0.75} 1.01436x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99702x\\
+10 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99586x& \cellcolor[rgb]{0.7529296875,0.9990234375,0.75} 1.01369x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99508x& \cellcolor[rgb]{0.751953125,0.9990234375,0.75} 1.00861x& \cellcolor[rgb]{0.7548828125,0.9990234375,0.75} 1.01981x& \cellcolor[rgb]{0.751953125,0.9990234375,0.75} 1.00861x& \cellcolor[rgb]{0.755859375,0.9990234375,0.75} 1.02598x\\
+12 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7548828125,0.9990234375,0.75} 1.02349x& \cellcolor[rgb]{0.76171875,0.9990234375,0.75} 1.04789x& \cellcolor[rgb]{0.759765625,0.9990234375,0.75} 1.04270x& \cellcolor[rgb]{0.7587890625,0.9990234375,0.75} 1.03716x& \cellcolor[rgb]{0.765625,0.9990234375,0.75} 1.06517x& \cellcolor[rgb]{0.763671875,0.9990234375,0.75} 1.05770x& \cellcolor[rgb]{0.77734375,0.9990234375,0.75} 1.11132x\\
+14 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.759765625,0.9990234375,0.75} 1.04054x& \cellcolor[rgb]{0.763671875,0.9990234375,0.75} 1.05851x& \cellcolor[rgb]{0.759765625,0.9990234375,0.75} 1.04050x& \cellcolor[rgb]{0.7626953125,0.9990234375,0.75} 1.05301x& \cellcolor[rgb]{0.7568359375,0.9990234375,0.75} 1.02863x& \cellcolor[rgb]{0.7607421875,0.9990234375,0.75} 1.04599x& \cellcolor[rgb]{0.7900390625,0.9990234375,0.75} 1.16166x\\
+16 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08630x& \cellcolor[rgb]{0.7724609375,0.9990234375,0.75} 1.09112x& \cellcolor[rgb]{0.7666015625,0.9990234375,0.75} 1.06935x& \cellcolor[rgb]{0.7724609375,0.9990234375,0.75} 1.09077x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08669x& \cellcolor[rgb]{0.765625,0.9990234375,0.75} 1.06631x& \cellcolor[rgb]{0.8525390625,0.9990234375,0.75} 1.41519x\\
+18 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7919921875,0.9990234375,0.75} 1.17172x& \cellcolor[rgb]{0.791015625,0.9990234375,0.75} 1.16684x& \cellcolor[rgb]{0.7880859375,0.9990234375,0.75} 1.15447x& \cellcolor[rgb]{0.7900390625,0.9990234375,0.75} 1.16224x& \cellcolor[rgb]{0.7919921875,0.9990234375,0.75} 1.17110x& \cellcolor[rgb]{0.7900390625,0.9990234375,0.75} 1.16144x& \cellcolor[rgb]{0.9560546875,0.9990234375,0.75} 1.83133x\\
+20 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.23037x& \cellcolor[rgb]{0.80859375,0.9990234375,0.75} 1.23533x& \cellcolor[rgb]{0.8076171875,0.9990234375,0.75} 1.23433x& \cellcolor[rgb]{0.8095703125,0.9990234375,0.75} 1.23986x& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.23120x& \cellcolor[rgb]{0.8046875,0.9990234375,0.75} 1.22283x& \cellcolor[rgb]{0.9990234375,0.990234375,0.75} 2.26430x\\
+22 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.826171875,0.9990234375,0.75} 1.30843x& \cellcolor[rgb]{0.8251953125,0.9990234375,0.75} 1.30498x& \cellcolor[rgb]{0.826171875,0.9990234375,0.75} 1.30814x& \cellcolor[rgb]{0.826171875,0.9990234375,0.75} 1.30594x& \cellcolor[rgb]{0.8251953125,0.9990234375,0.75} 1.30564x& \cellcolor[rgb]{0.82421875,0.9990234375,0.75} 1.29918x& \cellcolor[rgb]{0.9990234375,0.978515625,0.75} 2.64427x\\
+24 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.36606x& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36299x& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.36538x& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36151x& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36449x& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36204x& \cellcolor[rgb]{0.9990234375,0.970703125,0.75} 2.89705x\\
+26 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.35207x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.35059x& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35397x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.34954x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.35255x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.34932x& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.92968x\\
+28 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.35918x& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35626x& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36006x& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35674x& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.35812x& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35462x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.96506x\\
+30 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8515625,0.9990234375,0.75} 1.41137x& \cellcolor[rgb]{0.8505859375,0.9990234375,0.75} 1.40745x& \cellcolor[rgb]{0.8515625,0.9990234375,0.75} 1.41125x& \cellcolor[rgb]{0.8505859375,0.9990234375,0.75} 1.40768x& \cellcolor[rgb]{0.8515625,0.9990234375,0.75} 1.40935x& \cellcolor[rgb]{0.8505859375,0.9990234375,0.75} 1.40589x& \cellcolor[rgb]{0.9990234375,0.96484375,0.75} 3.08506x\\
+32 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.853515625,0.9990234375,0.75} 1.41590x& \cellcolor[rgb]{0.8525390625,0.9990234375,0.75} 1.41255x& \cellcolor[rgb]{0.853515625,0.9990234375,0.75} 1.41652x& \cellcolor[rgb]{0.8525390625,0.9990234375,0.75} 1.41300x& \cellcolor[rgb]{0.8525390625,0.9990234375,0.75} 1.41399x& \cellcolor[rgb]{0.8515625,0.9990234375,0.75} 1.41115x& \cellcolor[rgb]{0.9990234375,0.9638671875,0.75} 3.09890x\\
+\hline
 \end{NiceTabular}
+\caption{\label{demo-table}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
 \end{center}
+\end{table}
 The above measures are significantly equivalent to one another, with all allocators (except greedy 0) seeming to converge towards being 37\% slower than Clang. This isn't particularly surprising, as the x86 translation is more concerned with preserving callee saved registers than necessary in pushing each and every one despite not being in use. Also, instead of pushing with the \lstinline!push! instruction it would be faster to simply subtract from the \lstinline!%rsp! register directly and using \lstinline!mov! directly.
 
 What's more interesting and related to the allocation is the fact that greedy 0 is more than twice as slow. This is presumably because the \lstinline!fib! function that has 7 variables can assign each of them to a register for the first six allocators listed. However, the last one (greedy 0), has no assignable registers, so is forced to start spilling from the very beginning. To illusidate this hypothesis, here is the same benchmark but only for the greedy of decreasing \(k\) assignable registers:
-
+\begin{table}[!h]
 \begin{center}
-\begin{NiceTabular}{>{\columncolor{gray!10}}ccccccccc}
-\rowcolor{gray!10}n & clang & greedy 12 & greedy 8 & greedy 6 & greedy 4 & greedy 2 & greedy 1 & greedy 0 \\
-20 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8115234375,0.9990234375,0.75} 1.25& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.23& \cellcolor[rgb]{0.81640625,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8505859375,0.9990234375,0.75} 1.41& \cellcolor[rgb]{0.9990234375,0.9921875,0.75} 2.20& \cellcolor[rgb]{0.9990234375,0.9912109375,0.75} 2.24\\
-21 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8173828125,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.81640625,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.853515625,0.9990234375,0.75} 1.42& \cellcolor[rgb]{0.8642578125,0.9990234375,0.75} 1.46& \cellcolor[rgb]{0.9990234375,0.9853515625,0.75} 2.42& \cellcolor[rgb]{0.9990234375,0.984375,0.75} 2.46\\
-22 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.822265625,0.9990234375,0.75} 1.29& \cellcolor[rgb]{0.82421875,0.9990234375,0.75} 1.30& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.86328125,0.9990234375,0.75} 1.46& \cellcolor[rgb]{0.8759765625,0.9990234375,0.75} 1.51& \cellcolor[rgb]{0.9990234375,0.98046875,0.75} 2.57& \cellcolor[rgb]{0.9990234375,0.9794921875,0.75} 2.62\\
-23 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.84375,0.9990234375,0.75} 1.38& \cellcolor[rgb]{0.8740234375,0.9990234375,0.75} 1.50& \cellcolor[rgb]{0.88671875,0.9990234375,0.75} 1.55& \cellcolor[rgb]{0.9990234375,0.9775390625,0.75} 2.69& \cellcolor[rgb]{0.9990234375,0.9755859375,0.75} 2.74\\
-24 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8349609375,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.8642578125,0.9990234375,0.75} 1.46& \cellcolor[rgb]{0.8837890625,0.9990234375,0.75} 1.54& \cellcolor[rgb]{0.8935546875,0.9990234375,0.75} 1.58& \cellcolor[rgb]{0.9990234375,0.974609375,0.75} 2.78& \cellcolor[rgb]{0.9990234375,0.97265625,0.75} 2.83\\
-25 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8525390625,0.9990234375,0.75} 1.41& \cellcolor[rgb]{0.8837890625,0.9990234375,0.75} 1.54& \cellcolor[rgb]{0.896484375,0.9990234375,0.75} 1.59& \cellcolor[rgb]{0.9990234375,0.97265625,0.75} 2.83& \cellcolor[rgb]{0.9990234375,0.970703125,0.75} 2.89\\
-26 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.853515625,0.9990234375,0.75} 1.42& \cellcolor[rgb]{0.88671875,0.9990234375,0.75} 1.55& \cellcolor[rgb]{0.8994140625,0.9990234375,0.75} 1.60& \cellcolor[rgb]{0.9990234375,0.9716796875,0.75} 2.87& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.93\\
-27 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.857421875,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8876953125,0.9990234375,0.75} 1.56& \cellcolor[rgb]{0.90234375,0.9990234375,0.75} 1.61& \cellcolor[rgb]{0.9990234375,0.970703125,0.75} 2.89& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.95\\
-28 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8564453125,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8916015625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.904296875,0.9990234375,0.75} 1.62& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.92& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.97\\
-29 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8583984375,0.9990234375,0.75} 1.44& \cellcolor[rgb]{0.890625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.9052734375,0.9990234375,0.75} 1.62& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.92& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.98\\
-30 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8564453125,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.890625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.90625,0.9990234375,0.75} 1.63& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.93& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.98\\
-31 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.857421875,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8916015625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.9052734375,0.9990234375,0.75} 1.62& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.93& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
-32 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8564453125,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.890625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.90625,0.9990234375,0.75} 1.63& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.92& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.98\\
-33 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.857421875,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8916015625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.90625,0.9990234375,0.75} 1.63& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.94& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
-34 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.857421875,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8916015625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.9052734375,0.9990234375,0.75} 1.63& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.94& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
-35 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.857421875,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8916015625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.90625,0.9990234375,0.75} 1.63& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.93& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
-36 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.857421875,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8916015625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.90625,0.9990234375,0.75} 1.63& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.94& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
+\begin{NiceTabular}{|c|ccccccccc|}
+\hline
+n & clang & greedy 12 & greedy 8 & greedy 6 & greedy 4 & greedy 2 & greedy 1 & greedy 0 & tiger \\
+\hline
+8 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99429x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.98513x& \cellcolor[rgb]{0.751953125,0.9990234375,0.75} 1.00816x& \cellcolor[rgb]{0.7529296875,0.9990234375,0.75} 1.01180x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99806x& \cellcolor[rgb]{0.751953125,0.9990234375,0.75} 1.00869x& \cellcolor[rgb]{0.751953125,0.9990234375,0.75} 1.00883x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99979x\\
+10 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99057x& \cellcolor[rgb]{0.7578125,0.9990234375,0.75} 1.03464x& \cellcolor[rgb]{0.7578125,0.9990234375,0.75} 1.03147x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99206x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00151x& \cellcolor[rgb]{0.7607421875,0.9990234375,0.75} 1.04382x& \cellcolor[rgb]{0.76171875,0.9990234375,0.75} 1.04785x& \cellcolor[rgb]{0.763671875,0.9990234375,0.75} 1.05639x\\
+12 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00006x& \cellcolor[rgb]{0.7509765625,0.9990234375,0.75} 1.00578x& \cellcolor[rgb]{0.7529296875,0.9990234375,0.75} 1.01540x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99370x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.97925x& \cellcolor[rgb]{0.7666015625,0.9990234375,0.75} 1.06915x& \cellcolor[rgb]{0.76953125,0.9990234375,0.75} 1.07918x& \cellcolor[rgb]{0.7578125,0.9990234375,0.75} 1.03213x\\
+14 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.755859375,0.9990234375,0.75} 1.02737x& \cellcolor[rgb]{0.7568359375,0.9990234375,0.75} 1.02834x& \cellcolor[rgb]{0.76171875,0.9990234375,0.75} 1.04708x& \cellcolor[rgb]{0.7568359375,0.9990234375,0.75} 1.02997x& \cellcolor[rgb]{0.7646484375,0.9990234375,0.75} 1.06066x& \cellcolor[rgb]{0.79296875,0.9990234375,0.75} 1.17635x& \cellcolor[rgb]{0.7841796875,0.9990234375,0.75} 1.14104x& \cellcolor[rgb]{0.78125,0.9990234375,0.75} 1.12727x\\
+16 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08717x& \cellcolor[rgb]{0.7734375,0.9990234375,0.75} 1.09426x& \cellcolor[rgb]{0.77734375,0.9990234375,0.75} 1.11143x& \cellcolor[rgb]{0.7841796875,0.9990234375,0.75} 1.13760x& \cellcolor[rgb]{0.78125,0.9990234375,0.75} 1.12774x& \cellcolor[rgb]{0.8525390625,0.9990234375,0.75} 1.41194x& \cellcolor[rgb]{0.849609375,0.9990234375,0.75} 1.40329x& \cellcolor[rgb]{0.8212890625,0.9990234375,0.75} 1.28770x\\
+18 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.78125,0.9990234375,0.75} 1.12836x& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14704x& \cellcolor[rgb]{0.7900390625,0.9990234375,0.75} 1.16301x& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.23098x& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.22815x& \cellcolor[rgb]{0.94140625,0.9990234375,0.75} 1.77085x& \cellcolor[rgb]{0.947265625,0.9990234375,0.75} 1.79503x& \cellcolor[rgb]{0.8720703125,0.9990234375,0.75} 1.49336x\\
+20 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.22913x& \cellcolor[rgb]{0.8056640625,0.9990234375,0.75} 1.22392x& \cellcolor[rgb]{0.8173828125,0.9990234375,0.75} 1.27241x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.35182x& \cellcolor[rgb]{0.845703125,0.9990234375,0.75} 1.38569x& \cellcolor[rgb]{0.9990234375,0.9912109375,0.75} 2.22689x& \cellcolor[rgb]{0.9990234375,0.990234375,0.75} 2.26200x& \cellcolor[rgb]{0.9501953125,0.9990234375,0.75} 1.80663x\\
+22 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.822265625,0.9990234375,0.75} 1.29405x& \cellcolor[rgb]{0.8232421875,0.9990234375,0.75} 1.29616x& \cellcolor[rgb]{0.8349609375,0.9990234375,0.75} 1.34432x& \cellcolor[rgb]{0.865234375,0.9990234375,0.75} 1.46289x& \cellcolor[rgb]{0.8759765625,0.9990234375,0.75} 1.50765x& \cellcolor[rgb]{0.9990234375,0.98046875,0.75} 2.57480x& \cellcolor[rgb]{0.9990234375,0.9794921875,0.75} 2.62632x& \cellcolor[rgb]{0.9990234375,0.9970703125,0.75} 2.05105x\\
+24 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.83203125,0.9990234375,0.75} 1.33240x& \cellcolor[rgb]{0.83203125,0.9990234375,0.75} 1.33275x& \cellcolor[rgb]{0.8486328125,0.9990234375,0.75} 1.39726x& \cellcolor[rgb]{0.87890625,0.9990234375,0.75} 1.52070x& \cellcolor[rgb]{0.892578125,0.9990234375,0.75} 1.57452x& \cellcolor[rgb]{0.9990234375,0.974609375,0.75} 2.77989x& \cellcolor[rgb]{0.9990234375,0.97265625,0.75} 2.83443x& \cellcolor[rgb]{0.9990234375,0.9931640625,0.75} 2.18442x\\
+26 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.34858x& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.34784x& \cellcolor[rgb]{0.853515625,0.9990234375,0.75} 1.41620x& \cellcolor[rgb]{0.8828125,0.9990234375,0.75} 1.53692x& \cellcolor[rgb]{0.8994140625,0.9990234375,0.75} 1.60380x& \cellcolor[rgb]{0.9990234375,0.9716796875,0.75} 2.87114x& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.92874x& \cellcolor[rgb]{0.9990234375,0.9912109375,0.75} 2.24149x\\
+28 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35448x& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35457x& \cellcolor[rgb]{0.8544921875,0.9990234375,0.75} 1.42324x& \cellcolor[rgb]{0.8857421875,0.9990234375,0.75} 1.54897x& \cellcolor[rgb]{0.90234375,0.9990234375,0.75} 1.61429x& \cellcolor[rgb]{0.9990234375,0.970703125,0.75} 2.90730x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.96219x& \cellcolor[rgb]{0.9990234375,0.990234375,0.75} 2.26833x\\
+30 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.35807x& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.35784x& \cellcolor[rgb]{0.85546875,0.9990234375,0.75} 1.42732x& \cellcolor[rgb]{0.888671875,0.9990234375,0.75} 1.55842x& \cellcolor[rgb]{0.904296875,0.9990234375,0.75} 1.62109x& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.92283x& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.98079x& \cellcolor[rgb]{0.9990234375,0.990234375,0.75} 2.28148x\\
+32 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.36987x& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.36911x& \cellcolor[rgb]{0.8583984375,0.9990234375,0.75} 1.43879x& \cellcolor[rgb]{0.892578125,0.9990234375,0.75} 1.57453x& \cellcolor[rgb]{0.9072265625,0.9990234375,0.75} 1.63423x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.94896x& \cellcolor[rgb]{0.9990234375,0.966796875,0.75} 3.00741x& \cellcolor[rgb]{0.9990234375,0.9892578125,0.75} 2.29882x\\
+\hline
 \end{NiceTabular}
+\caption{\label{demo-table}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
 \end{center}
+\end{table}
 
 \subsubsection{\lstinline!benches/ackermann.ll!}
 
@@ -737,84 +799,99 @@ Another benchmark that derives highly from the recursive structure of \lstinline
 
 %TODO: bedøm om det giver mening
 
-%\begin{center}
-%\begin{tabular}{|c||c|c|c|c|c|c|c|c|c|c|c|} 
- %\hline
-%& clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
- %\hline
-%34 & \cellcolor{1.0, 1.0 , 1.0}1.00& 1.37& 1.37& 1.37& 1.37& 1.36& 1.41& 2.99\\
-%35 & 1.00& 1.39& 1.37& 1.41& 1.37& 1.37& 1.38& 3.00\\
-%36 & 1.00& 1.37& 1.37& 1.37& 1.37& 1.37& 1.38& 2.99\\
-%37 & 1.00& 1.38& 1.37& 1.37& 1.37& 1.39& 1.37& 2.99\\
-%38 & 1.00& 1.37& 1.37& 1.38& 1.37& 1.37& 1.37& 2.99\\
-%39 & 1.00& 1.37& 1.38& 1.37& 1.39& 1.37& 1.37& 2.99\\
-%40 & 1.00& 1.37& 1.37& 1.39& 1.37& 1.37& 1.37& 2.99\\
-%41 & 1.00& 1.37& 1.38& 1.37& 1.37& 1.37& 1.37& 2.99\\
-%42 & 1.00& 1.38& 1.38& 1.37& 1.37& 1.37& 1.37& 3.04\\
- %\hline
-%\end{tabular}
-%\end{center}
-
-%\begin{center}
-%\begin{tabular}{|c||c|c|c|c|c|c|c|c|c|c|c|} 
- %\hline
-%&clang& greedy 12 & greedy 8 & greedy 4 & greedy 2 & greedy 1 & greedy 0 \\
- %\hline
-%34 & 1.00& 1.41& 1.37& 1.57& 1.63& 2.93& 3.04\\
-%35 & 1.00& 1.37& 1.38& 1.58& 1.66& 2.95& 3.01\\
-%36 & 1.00& 1.36& 1.40& 1.56& 1.66& 2.93& 2.98\\
-%37 & 1.00& 1.38& 1.38& 1.58& 1.64& 2.95& 3.01\\
-%38 & 1.00& 1.37& 1.37& 1.57& 1.64& 2.93& 3.04\\
-%39 & 1.00& 1.36& 1.37& 1.57& 1.63& 2.94& 3.04\\
-%40 & 1.00& 1.37& 1.37& 1.57& 1.63& 2.93& 3.04\\
-%41 & 1.00& 1.38& 1.41& 1.58& 1.67& 2.97& 3.03\\
-%42 & 1.00& 1.36& 1.37& 1.56& 1.62& 2.92& 2.98\\
-% \hline
-%\end{tabular}
-%\end{center}
 
 
 
 \subsubsection{\lstinline!benches/factori32.ll!}
+
 Prime factorization of \lstinline!i32!.
+\begin{table}[!h]
 \begin{center}
-\begin{tabular}{|c||c|c|c|c|} 
- \hline
- fib & clang & greedy & simple & linear \\ [0.5ex] 
- \hline
- 40 & 1.000000 & 1.438693 & 1.441270 & 0.73 \\ [1ex] 
- 41 & 1.000000 & 1.441035 & 1.440626 & 0.73 \\ [1ex] 
- 42 & 	1.000000 & 1.447140 & 1.446094 & 0\\
- \hline
-\end{tabular}
+\begin{NiceTabular}{|c|cccccccc|}
+\hline
+n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
+\hline
+268435399 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7783203125,0.9990234375,0.75} 1.11499x& \cellcolor[rgb]{0.77734375,0.9990234375,0.75} 1.11025x& \cellcolor[rgb]{0.7783203125,0.9990234375,0.75} 1.11595x& \cellcolor[rgb]{0.779296875,0.9990234375,0.75} 1.11943x& \cellcolor[rgb]{0.916015625,0.9990234375,0.75} 1.66718x& \cellcolor[rgb]{0.9990234375,0.9833984375,0.75} 2.47709x& \cellcolor[rgb]{0.9990234375,0.984375,0.75} 2.44535x\\
+536870909 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.64555x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.64645x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.63974x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.64095x& \cellcolor[rgb]{0.7607421875,0.9990234375,0.75} 1.04505x& \cellcolor[rgb]{0.9013671875,0.9990234375,0.75} 1.60979x& \cellcolor[rgb]{0.904296875,0.9990234375,0.75} 1.61997x\\
+1073741789 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7958984375,0.9990234375,0.75} 1.18438x& \cellcolor[rgb]{0.7978515625,0.9990234375,0.75} 1.19584x& \cellcolor[rgb]{0.796875,0.9990234375,0.75} 1.19047x& \cellcolor[rgb]{0.7958984375,0.9990234375,0.75} 1.18472x& \cellcolor[rgb]{0.9990234375,0.9951171875,0.75} 2.09863x& \cellcolor[rgb]{0.9990234375,0.9560546875,0.75} 3.36121x& \cellcolor[rgb]{0.9990234375,0.9560546875,0.75} 3.37087x\\
+2147483647 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8017578125,0.9990234375,0.75} 1.20872x& \cellcolor[rgb]{0.80078125,0.9990234375,0.75} 1.20665x& \cellcolor[rgb]{0.80078125,0.9990234375,0.75} 1.20405x& \cellcolor[rgb]{0.8017578125,0.9990234375,0.75} 1.20826x& \cellcolor[rgb]{0.9990234375,0.98828125,0.75} 2.32725x& \cellcolor[rgb]{0.9990234375,0.9453125,0.75} 3.71253x& \cellcolor[rgb]{0.9990234375,0.9453125,0.75} 3.71693x\\
+4294967291 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.79296875,0.9990234375,0.75} 1.17597x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18070x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18067x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18159x& \cellcolor[rgb]{0.9990234375,0.986328125,0.75} 2.37710x& \cellcolor[rgb]{0.9990234375,0.9345703125,0.75} 4.04637x& \cellcolor[rgb]{0.9990234375,0.9345703125,0.75} 4.06492x\\
+8589934583 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8203125,0.9990234375,0.75} 1.28534x& \cellcolor[rgb]{0.822265625,0.9990234375,0.75} 1.29317x& \cellcolor[rgb]{0.822265625,0.9990234375,0.75} 1.29145x& \cellcolor[rgb]{0.8212890625,0.9990234375,0.75} 1.28941x& \cellcolor[rgb]{0.9990234375,0.9755859375,0.75} 2.73679x& \cellcolor[rgb]{0.9990234375,0.9130859375,0.75} 4.74271x& \cellcolor[rgb]{0.9990234375,0.912109375,0.75} 4.76719x\\
+17179869143 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.31790x& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32297x& \cellcolor[rgb]{0.8310546875,0.9990234375,0.75} 1.32585x& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32452x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.96961x& \cellcolor[rgb]{0.9990234375,0.900390625,0.75} 5.15949x& \cellcolor[rgb]{0.9990234375,0.9033203125,0.75} 5.07055x\\
+34359738337 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.34905x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.34969x& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.34780x& \cellcolor[rgb]{0.845703125,0.9990234375,0.75} 1.38507x& \cellcolor[rgb]{0.9990234375,0.96484375,0.75} 3.08190x& \cellcolor[rgb]{0.9990234375,0.8935546875,0.75} 5.37886x& \cellcolor[rgb]{0.9990234375,0.892578125,0.75} 5.39434x\\
+\hline
+\end{NiceTabular}
+\caption{\label{demo-table}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
 \end{center}
+\end{table}
 
-%TODO:
-%
-%* should I use shell time, or /usr/bin/time?
-%* how do I measure cpu cycles?
-%\begin{center}
-%\begin{tabular}{ c c c }
- %cell1 & cell2 & cell3 \\ 
- %cell4 & cell5 & cell6 \\  
- %cell7 & cell8 & cell9    
-%\end{tabular}
-%\end{center}
+\subsubsection{\lstinline!benches/factori64.ll!}
+\begin{table}[!h]
+\begin{center}
+\begin{NiceTabular}{|c|cccccccc|}
+\hline
+n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
+\hline
+268435399 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7783203125,0.9990234375,0.75} 1.11499x& \cellcolor[rgb]{0.77734375,0.9990234375,0.75} 1.11025x& \cellcolor[rgb]{0.7783203125,0.9990234375,0.75} 1.11595x& \cellcolor[rgb]{0.779296875,0.9990234375,0.75} 1.11943x& \cellcolor[rgb]{0.916015625,0.9990234375,0.75} 1.66718x& \cellcolor[rgb]{0.9990234375,0.9833984375,0.75} 2.47709x& \cellcolor[rgb]{0.9990234375,0.984375,0.75} 2.44535x\\
+536870909 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.64555x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.64645x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.63974x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.64095x& \cellcolor[rgb]{0.7607421875,0.9990234375,0.75} 1.04505x& \cellcolor[rgb]{0.9013671875,0.9990234375,0.75} 1.60979x& \cellcolor[rgb]{0.904296875,0.9990234375,0.75} 1.61997x\\
+1073741789 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7958984375,0.9990234375,0.75} 1.18438x& \cellcolor[rgb]{0.7978515625,0.9990234375,0.75} 1.19584x& \cellcolor[rgb]{0.796875,0.9990234375,0.75} 1.19047x& \cellcolor[rgb]{0.7958984375,0.9990234375,0.75} 1.18472x& \cellcolor[rgb]{0.9990234375,0.9951171875,0.75} 2.09863x& \cellcolor[rgb]{0.9990234375,0.9560546875,0.75} 3.36121x& \cellcolor[rgb]{0.9990234375,0.9560546875,0.75} 3.37087x\\
+2147483647 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8017578125,0.9990234375,0.75} 1.20872x& \cellcolor[rgb]{0.80078125,0.9990234375,0.75} 1.20665x& \cellcolor[rgb]{0.80078125,0.9990234375,0.75} 1.20405x& \cellcolor[rgb]{0.8017578125,0.9990234375,0.75} 1.20826x& \cellcolor[rgb]{0.9990234375,0.98828125,0.75} 2.32725x& \cellcolor[rgb]{0.9990234375,0.9453125,0.75} 3.71253x& \cellcolor[rgb]{0.9990234375,0.9453125,0.75} 3.71693x\\
+4294967291 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.79296875,0.9990234375,0.75} 1.17597x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18070x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18067x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18159x& \cellcolor[rgb]{0.9990234375,0.986328125,0.75} 2.37710x& \cellcolor[rgb]{0.9990234375,0.9345703125,0.75} 4.04637x& \cellcolor[rgb]{0.9990234375,0.9345703125,0.75} 4.06492x\\
+8589934583 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8203125,0.9990234375,0.75} 1.28534x& \cellcolor[rgb]{0.822265625,0.9990234375,0.75} 1.29317x& \cellcolor[rgb]{0.822265625,0.9990234375,0.75} 1.29145x& \cellcolor[rgb]{0.8212890625,0.9990234375,0.75} 1.28941x& \cellcolor[rgb]{0.9990234375,0.9755859375,0.75} 2.73679x& \cellcolor[rgb]{0.9990234375,0.9130859375,0.75} 4.74271x& \cellcolor[rgb]{0.9990234375,0.912109375,0.75} 4.76719x\\
+17179869143 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.31790x& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32297x& \cellcolor[rgb]{0.8310546875,0.9990234375,0.75} 1.32585x& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32452x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.96961x& \cellcolor[rgb]{0.9990234375,0.900390625,0.75} 5.15949x& \cellcolor[rgb]{0.9990234375,0.9033203125,0.75} 5.07055x\\
+34359738337 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.34905x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.34969x& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.34780x& \cellcolor[rgb]{0.845703125,0.9990234375,0.75} 1.38507x& \cellcolor[rgb]{0.9990234375,0.96484375,0.75} 3.08190x& \cellcolor[rgb]{0.9990234375,0.8935546875,0.75} 5.37886x& \cellcolor[rgb]{0.9990234375,0.892578125,0.75} 5.39434x\\
+\hline
+\end{NiceTabular}
+\caption{\label{demo-table}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
+\end{center}
+\end{table}
+
+\subsubsection{\lstinline!benches/sieven.ll!}
+\begin{table}[!h]
+\begin{center}
+\begin{NiceTabular}{|c|cccccccc|}
+\hline
+n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
+\hline
+128 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.98451x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.98378x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.98295x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00304x& \cellcolor[rgb]{0.8154296875,0.9990234375,0.75} 1.26346x& \cellcolor[rgb]{0.8125,0.9990234375,0.75} 1.25285x& \cellcolor[rgb]{0.8115234375,0.9990234375,0.75} 1.24850x\\
+256 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7529296875,0.9990234375,0.75} 1.01514x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00375x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.98807x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00262x& \cellcolor[rgb]{0.869140625,0.9990234375,0.75} 1.47906x& \cellcolor[rgb]{0.8876953125,0.9990234375,0.75} 1.55358x& \cellcolor[rgb]{0.8857421875,0.9990234375,0.75} 1.54756x\\
+512 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.751953125,0.9990234375,0.75} 1.00899x& \cellcolor[rgb]{0.7578125,0.9990234375,0.75} 1.03156x& \cellcolor[rgb]{0.7578125,0.9990234375,0.75} 1.03499x& \cellcolor[rgb]{0.7529296875,0.9990234375,0.75} 1.01201x& \cellcolor[rgb]{0.9990234375,0.998046875,0.75} 2.00339x& \cellcolor[rgb]{0.9990234375,0.9951171875,0.75} 2.09435x& \cellcolor[rgb]{0.9990234375,0.994140625,0.75} 2.14397x\\
+1024 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7568359375,0.9990234375,0.75} 1.03016x& \cellcolor[rgb]{0.7568359375,0.9990234375,0.75} 1.02839x& \cellcolor[rgb]{0.7529296875,0.9990234375,0.75} 1.01247x& \cellcolor[rgb]{0.7568359375,0.9990234375,0.75} 1.03097x& \cellcolor[rgb]{0.9990234375,0.97265625,0.75} 2.84545x& \cellcolor[rgb]{0.9990234375,0.96484375,0.75} 3.07906x& \cellcolor[rgb]{0.9990234375,0.96484375,0.75} 3.07390x\\
+2048 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7587890625,0.9990234375,0.75} 1.03732x& \cellcolor[rgb]{0.7607421875,0.9990234375,0.75} 1.04387x& \cellcolor[rgb]{0.7802734375,0.9990234375,0.75} 1.12328x& \cellcolor[rgb]{0.76171875,0.9990234375,0.75} 1.04998x& \cellcolor[rgb]{0.9990234375,0.9287109375,0.75} 4.24679x& \cellcolor[rgb]{0.9990234375,0.919921875,0.75} 4.52175x& \cellcolor[rgb]{0.9990234375,0.91796875,0.75} 4.60346x\\
+4096 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7646484375,0.9990234375,0.75} 1.05883x& \cellcolor[rgb]{0.78125,0.9990234375,0.75} 1.12849x& \cellcolor[rgb]{0.7626953125,0.9990234375,0.75} 1.05254x& \cellcolor[rgb]{0.775390625,0.9990234375,0.75} 1.10378x& \cellcolor[rgb]{0.9990234375,0.8720703125,0.75} 6.05831x& \cellcolor[rgb]{0.9990234375,0.8583984375,0.75} 6.50294x& \cellcolor[rgb]{0.9990234375,0.8544921875,0.75} 6.61920x\\
+8192 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7724609375,0.9990234375,0.75} 1.09357x& \cellcolor[rgb]{0.8095703125,0.9990234375,0.75} 1.24057x& \cellcolor[rgb]{0.7744140625,0.9990234375,0.75} 1.10146x& \cellcolor[rgb]{0.7783203125,0.9990234375,0.75} 1.11378x& \cellcolor[rgb]{0.9990234375,0.80859375,0.75} 8.09302x& \cellcolor[rgb]{0.9990234375,0.7900390625,0.75} 8.69270x& \cellcolor[rgb]{0.9990234375,0.783203125,0.75} 8.92530x\\
+16384 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7763671875,0.9990234375,0.75} 1.10882x& \cellcolor[rgb]{0.7822265625,0.9990234375,0.75} 1.13274x& \cellcolor[rgb]{0.7763671875,0.9990234375,0.75} 1.10937x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14416x& \cellcolor[rgb]{0.9990234375,0.7548828125,0.75} 9.84245x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 10.69728x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 10.80864x\\
+\hline
+\end{NiceTabular}
+\caption{\label{demo-table}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
+\end{center}
+\end{table}
+
+\subsubsection{\lstinline!benches/subset.ll!}
+\begin{NiceTabular}{|c|cccccccc|}
+\hline
+n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
+\hline
+14 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08770x& \cellcolor[rgb]{0.787109375,0.9990234375,0.75} 1.15188x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08832x& \cellcolor[rgb]{0.7890625,0.9990234375,0.75} 1.15813x& \cellcolor[rgb]{0.98046875,0.9990234375,0.75} 1.92564x& \cellcolor[rgb]{0.9990234375,0.98046875,0.75} 2.59504x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.95798x\\
+15 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08304x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14485x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08536x& \cellcolor[rgb]{0.787109375,0.9990234375,0.75} 1.14973x& \cellcolor[rgb]{0.9833984375,0.9990234375,0.75} 1.93885x& \cellcolor[rgb]{0.9990234375,0.9794921875,0.75} 2.60300x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.96001x\\
+16 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08622x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14309x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08345x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14388x& \cellcolor[rgb]{0.9853515625,0.9990234375,0.75} 1.94770x& \cellcolor[rgb]{0.9990234375,0.978515625,0.75} 2.62809x& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99463x\\
+17 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08533x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14335x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08652x& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14605x& \cellcolor[rgb]{0.986328125,0.9990234375,0.75} 1.94922x& \cellcolor[rgb]{0.9990234375,0.978515625,0.75} 2.64844x& \cellcolor[rgb]{0.9990234375,0.966796875,0.75} 3.01363x\\
+\hline
+\end{NiceTabular}
+
+\begin{NiceTabular}{|c|cccccccc|}
+\hline
+n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
+\hline
+100 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.9990234375,0.9619140625,0.75} 3.17253x& \cellcolor[rgb]{0.9990234375,0.9560546875,0.75} 3.35873x& \cellcolor[rgb]{0.9990234375,0.9619140625,0.75} 3.17637x& \cellcolor[rgb]{0.9990234375,0.9560546875,0.75} 3.37014x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 19.50758x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 19.44391x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 19.61921x\\
+1000 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.9990234375,0.9189453125,0.75} 4.54197x& \cellcolor[rgb]{0.9990234375,0.91015625,0.75} 4.83710x& \cellcolor[rgb]{0.9990234375,0.9189453125,0.75} 4.54593x& \cellcolor[rgb]{0.9990234375,0.91015625,0.75} 4.83359x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 31.35583x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 31.26454x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 31.56475x\\
+10000 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.9990234375,0.9111328125,0.75} 4.80821x& \cellcolor[rgb]{0.9990234375,0.9013671875,0.75} 5.11478x& \cellcolor[rgb]{0.9990234375,0.9111328125,0.75} 4.80648x& \cellcolor[rgb]{0.9990234375,0.9013671875,0.75} 5.12019x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 33.50659x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 33.41428x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 33.72138x\\
+\hline
+\end{NiceTabular}
 
 
- 
 
 
-
-%\begin{center}
-%\begin{tabular}{|c||c|c|c|c|} 
- %\hline
- %sha256 & clang & greedy & briggs & linear \\ [0.5ex] 
- %\hline
- %1000000 & 1 & 0.73 & 0.73 & 0.73 \\ [1ex] 
- %\hline
-%\end{tabular}
-%\end{center}
 
 
 \subsection{Comparison to other work and ideas for future work}
