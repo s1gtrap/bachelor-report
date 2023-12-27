@@ -11,6 +11,7 @@
 \usepackage{subcaption}
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath}
+\usepackage[table]{xcolor}% http://ctan.org/pkg/xcolor
 \usepackage{tikz}
 \usetikzlibrary{angles}
 \usetikzlibrary{arrows.meta}
@@ -30,6 +31,9 @@
 \usepackage{titlesec}
 \usepackage{xcolor}
 \usepackage{minted}
+\usepackage{nicematrix}
+\usepackage{collcell}
+\usepackage{varwidth}
 
 \definecolor{LightGray}{gray}{0.97}
 
@@ -193,7 +197,10 @@ Compilation refers to the process of translating from one language to another, m
 Most operations of a general-purpose programming language are translated to a set of control, logic, and arithmetic instructions to be executed sequentially on a computer processor: a single circuit/chip, referred to as the \textit{central processing unit} (CPU), the design of which has varied and evolved over time.
 
 Most CPUs are \textit{register machines}, in that they use a limited set of \textit{general-purpose registers} (GPRs) to store working values in combination with \textit{random access memory} (RAM) for mid-term, and other I/O peripherals for long-term storage. This can largely be attributed to performance, as register machines routinely outperform \textit{stack machines} \parencite{ShiYunhe2008VmsS} that are often used in VMs.
-Because of the limited amount of GPRs available simultaneously, a crucial part of the backend stage for an optimizing compiler is assigning each variable  of the source program to a GPR in such a way that maximizes performance without sacrificing correctness.
+Although register machines generally also have a stack available, as being limited to mere bytes of storage is simply unfeasible for most large scale applications, using it compared to GPRs is several orders of magnitude slower.
+Because of this, a crucial part of the backend stage for an optimizing compiler is assigning each variable  of the source program to a GPR in such a way that maximizes performance without sacrificing correctness.
+
+
 
 The process of assigning each variable to a GPR is referred to as \textit{register allocation}, and can be approached in several different ways. This paper will seek to implement graph coloring and linear scan and evaluate them in terms of runtime performance after compilation. %% TODO: compare with time-complexity/compile-time duration?
 The primary sources will be \textit{Modern Compiler Implementation in ML} \parencite{tiger} and \textit{Compilers: Principles, techniques, and tools} \parencite{dragon}, in addition to publications concerning the linear scan approach.
@@ -225,17 +232,14 @@ The control flow of a given program refers to the order in which instructions ar
 % mention basic block early on, they're a contiguous sequence of instructions that do not transfer control flow
 
 A continuous flow of instructions is referred to as a \textit{basic block}, defined as a sequence of instructions with no branches in or out except for the first instruction (referred to as a \textit{leader}, immediately following either the function entry or label within it) and the last (referred to as a \textit{terminator}, as it either terminates or transfers the flow of execution). %These are often referred to as terminators and can be thought of as an entirely different categoriy of instructions. % TODO: måske drop 'can be thought of'
-In order to represent the order in which instructions are executed, a \textit{control flow graph} (CFG) is introduced. It is a directed graph whose edges represent transfer of control. The type of node varies over the source material, with CFGs of the Appel test constructed over individual instructions (\cite{tiger}) and the Aho text over basic blocks (\cite{dragon}).
-Either way leaders may have some predecessors and terminators some successors associated with them.
+In order to represent the order in which instructions are executed, a \textit{control flow graph} (CFG) is introduced. It is a directed graph whose edges represent transfer of control. The type of node varies over the source material, with CFGs of the Appel text constructed over individual instructions (\cite{tiger}) and the Aho text over basic blocks (\cite{dragon}).
+Either way, leaders have a set of predecessors and terminators a set of successors associated with them.
 
 Terminators have one or two successors in the case of branching or none at all in the case of function exit. % These can either be associated basic blocks or individual instructions that make it up.
-Unconditional branching always transfers control flow to the block labelled, meaning only one successor follows, whereas conditional branching could transfer to either of the two, but because control flow analysis is not concerned with data, both are considered as possible successors. % TODO: rets 
+Unconditional branching always transfers control to the block labelled, meaning only one successor follows, whereas conditional branching could transfer to either of the two, but because control flow analysis is not concerned with data, both are considered as possible successors. % TODO: rets 
 
-Successors of node \(n\) are denoted
-\[
-  \mathit{succ}[n],
-\]
-and while each node also has predecessors associated, which consist of an  unbounded number of nodes from which cotrol may be transferred, it isn't particularly useful in the following analysis.
+Successors of node \(n\) are denoted \( \mathit{succ}[n], \)
+and while each node also has predecessors associated, which consist of an  unbounded number of nodes from which control may be transferred, it isn't particularly useful in the following analysis.
 
 %Basic blocks represent a single node in a \textit{control flow graph} (CFG), which is a directed graph whose edges denote transfer of  control flow.
 %The unconditional branch terminator always transfers control flow to the block labelled, meaning only one successor will follow, whereas conditional branching could transfer to either of the two, but because control flow analysis is not concerned with data, it simply adds both as successors. % TODO: rets 
@@ -282,7 +286,7 @@ Each function defined in an LLVM program is constructed with the help of
 Translating IR with an unbounded number of variables to a CPU with a bounded number of registers involves the process of assigning each variable a register such that no value that may be needed in the future is overwritten. %Therefore, any variable that may be used in the future is considered \textit{live}, and said to be in interference with any other variable live at any intersecting point.
 Variables that are in use at a given program point are considered \textit{live}, and although variables can be assigned the same register, %if they are not in interference
 variables that are live at the same time (i.e. at intersecting program points) cannot, in which case they are also said to be in interference with one another.
- Variables that are not in interference can be assigned the same register, and finding the precise points at which any variable is live is trivial for linear sequences of instructions. However, when conditional branching is introduced, deriving the path of execution becomes undecidable because of the halting problem. % TODO: finish this sentence
+ Variables that are not in interference can be assigned the same register, and finding the precise points at which any variable is live is trivial for linear sequences of instructions. However, when conditional branching is introduced, deriving the path of execution becomes undecidable. % TODO: finish this sentence
 
 For instance, suppose a function that calls another:
 
@@ -294,13 +298,18 @@ define i32 @countcall(i32 %x0) {
 }
 \end{minted}
 Because of the halting problem, static analysis cannot determine if the call to \lstinline!@subproc! will return for every possible implementation.  %which may or may not return control to the calling function:
- So when assigning \lstinline!%x1! a register it is undecidable whether the variable must be live in the last return instruction, i.e. needs to live across the call to another function which can overwrite several registers depending on calling conventions. Because of this, any sound approach to liveness analysis will be an approximation.
+So when assigning \lstinline!%x1! a register it is undecidable whether the variable must be live in the last return instruction, i.e. needs to live across the call to another. Because of this, any sound approach to liveness analysis will be an approximation.
+
+In some cases it is simply impossible to assign each variable its own register without conflict along interference edges, in which case one or more variables need to be assigned to memory instead. This is also referred to as \textit{spilling} the variable/register to the stack, or the variable itself is referred to as \textit{spilled}.
 
  % TODO: maybe find a better exampple with a better assignment that computer can't find?
  % TODO: maybe mention exponential brute force algorithms?
 
-A sound albeit very naive approach is to consider every variable live at every program point, such that every variable is in interference with one another, producing a fully connected interference graph. % FIXME: find a place for: This generally isn't a very performant approach in terms of execution 
-Such a heuristic is greedy in the sense that it picks an assignment known to be safe for the least amount of preprocessing work possible. However, this can be a very inefficient assignment at runtime: a number of \(n\)  variables greater than \(k\) working registers causes \(n-k\) variables to be spilled to memory, % TODO: skal der stå stack?
+A sound albeit very naive approach is to consider every variable live at every program point, such that every variable is in interference with one another, producing a fully connected interference graph.
+This forces every variable to be assigned a different register, which is a viable approach for small programs with fewer variables than the set of assignable registers.
+%where every variable is assigned a different register. % FIXME: find a place for: This generally isn't a very performant approach in terms of execution 
+Such a heuristic is greedy in the sense that it picks an assignment known to be safe for the least amount of preprocessing possible. However, this can be a very inefficient assignment at runtime. 
+When the number of variables is greater than the number of assignable registers, the variable is spilled. A number of \(n\)  variables greater than \(k\) working registers causes \(n-k\) variables to be spilled to memory, % TODO: skal der stå stack?
 which can greatly reduce performance, but  allows for translation in linear time. %FIXME: is this even true?
 
 \subsection{Dataflow Analysis}
@@ -316,7 +325,7 @@ The transfer constraint is based on a \textit{transfer function} that describes 
 \end{align}
 with the \(\mathit{use}[n]\) set being defined as any variables that may be used and the \(\mathit{def}[n]\) as the set of variables defined in node \(n\). Because the chosen IR is in SSA form the \(\mathit{def}[n]\) either consists of one variable or equal to \(\emptyset\). The  \(\mathit{use}[n]\) set is effectively unbounded as some instructions take any \(m\) variables as parameters.
 
-Control-flow constraints on the other hand propagate the use of variables to previously executed instructions, expecting these to be defined somewhere further up the CFG. This is done by propagating the union of the \textit{live-in} set associated with all immediate successor nodes. This is also referred to as the \textit{meet operator}, whose operator depends on the type of dataflow analysis as well, but for liveness analysis a union is performed on the previos \textit{live-in} variables.
+Control-flow constraints on the other hand propagate the use of variables to previously executed instructions, expecting these to be defined somewhere further up the CFG. This is done by propagating the union of the \textit{live-in} set associated with all immediate successor nodes. This is also referred to as the \textit{meet operator}, whose operator depends on the type of dataflow analysis as well, but for liveness analysis a union is performed on the \textit{live-in} sets of  any successive  nodes:
 \begin{align}\label{flowout}
   \mathit{out}\left[n\right] &= \bigcup_{s\in \mathit{succ}\left[n\right]} \mathit{in}\left[s\right]
 \end{align}
@@ -596,37 +605,57 @@ An example of this would be the division/remainder operation: since integer divi
 %
     %* moving sys-v abi arguments to assigned registers is treacherous
 
-\subsection{Asserting correctness}
+\subsection{Assessing Correctness}
+It is difficult to assert the correctness of a compiler. While writing simple unit tests is easy, guaranteeing the correctness of code generated for any given input is on a different order of magnitude in terms of complexity.
 
 Validating the correctness of each instruction translation is a complicated task given how low-level it is. One approach is attaching a debugger and examining the state before and after the translated sequence of x86 instructions is executed. The result of applying a binary operation,  for instance, should only affect the assigned register.
 
-\section{Further Optimization}
+\subsubsection{Debugger Harness}
+A more elaborate way of testing correctness of translation is to assert that there are no effects outside of those intended. One way of achieving this is to check if a group of x86 instructions representing a single LLVM-- operation change any values except those expected. An approach to this is to attach a debugger, insert a breakpoint before every LLVM-- instruction, and ensure that only the intended registers are altered.
+
+To achieve this, only a few changes need to be made to the codebase. A debug flag is introduced, which inserts a label before every instruction by adding a \lstinline!Breakpoint! variant of the \lstinline!ins! type before the assembly emitted of that specific operation. In this a unique identifier as well as a list changed expected to be made is encoded. 
+This includes a bitmask of GPRs that can possibly be changed (aside from the scrath registers of couse) as well as which parts of the stack may be modified. % TODO: implement the stack checker
+In addition to this, each of the labels are output with a \lstinline!.globl! directive in the file header. A file is built with these extra symbols using the \lstinline!-d! flag.
+
+To validate that this works as intended, 
+
+
+%\section{Further Optimization}
 
 % TODO: quote computability theory infinitely many optimizations
 
 
 \section{Evaluation}
 
-Relevant metrics by which to compare these variations are naturally the performance of the code generated at runtime, but also the time efficiency at compile-time. While the code written isn't expected to outperform LLVM, due to the time complexity of the linear scan and simplification algorithms implemented their respective runtime performances are expected to outperform the builtin graph coloring algorithm.
+While there are many approaches to assessing the quality of translation, one of the primary means is to simply measure the time taken to execute the code generated. 
+Assuming the translation is sound given the previous steps taken to validate correctness in translating \lstinline!LLVM--! to x86, it is a solid foundation for future optimizations. While there are certainly other factors worth measuring, only runtime performance is considered for this project. % FIXME: check if this is still true
+
+%There are different approaches to assessing how well a compiler backend translates IR to machine code targeting a specific architecture and platform. 
+
+
+
+%Relevant metrics by which to compare these variations are naturally the performance of the code generated at runtime, but also the time efficiency at compile-time. While the code written isn't expected to outperform LLVM, due to the time complexity of the linear scan and simplification algorithms implemented their respective runtime performances are expected to outperform the builtin graph coloring algorithm.
 
 % TODO: cpu cycles
 
-Another factor worth considering would be memory usage, caches misses, garbage collection (although not relevant to this as it doesn't use GC), vectorizatiion (loop optimizations by SIMD) etc.
+%Another factor worth considering would be memory usage, caches misses, garbage collection (although not relevant to this as it doesn't use GC), vectorizatiion (loop optimizations by SIMD) etc.
 
 \subsection{Benchmarking}
 
 %Runtime performance of generated code can be measured 
 
-There are different approaches to assessing how well a compiler backend translates IR to machine code targeting a specific architecture and platform. One of the primary means is to simply measure the time it takes to execute the code generated by it.
-
 Since the target architecture is x86-64, all benchmarks are executed natively on the fastest processor available to be used consistently at the time of writing. This is to maximize the sample size and in turn reduce uncertainty, but the clock speed at which the benchmarks are performed is irrelevant to how fast the generated code is. Because of this, the metric recorded is the amount of CPU cycles spent executing from start to finish instead of actual time in seconds, as the time measure only works as a more imprecise estimate of the amount of underlying work/execution steps performed on the processor.
 
-Needless to say, CPU cycles isn't a perfect measurement either, but it works to eliminate the clock speed as well as negate much of the time the scheduler allocates for other processes. Scheduling still has a negative impact on execution because of the cache misses caused by context switching, but outside of executing each program in immediate mode which isn't possible on Linux or macOS this is a sensible estimate. To further reduce context switching, benchmarks are made on a fresh restart with minimal background processes running.
+CPU cycles isn't a perfect measurement either, but it works to eliminate the clock speed as well as negate much of the time the scheduler allocates for other processes. Scheduling still has a negative impact on execution because of the cache misses caused by context switching, but outside of executing each program in immediate mode (which isn't possible on Linux or macOS) this is a sensible estimate. To further reduce context switching, benchmarks are made on a fresh restart with minimal processes running (Xorg etc.).
 
-Additionally, all benchmarks are deterministic, so the value of each virtual variable will stay the same at every instruction step of execution when compared to another run with the same starting conditions. %all the way through the execution compared to another run of the same program with the same input. %% FIXME: not necessarily true as loops exist
-This means that the cycles measured over infinitely many runs will converge towards a 'perfect' run with no cache misses as caused by context switching. So across \(n\) runs, the run least affected by context switching will be the one with the least CPU cycles, so is the one most representative of the actual performance without noise.
+Additionally, all benchmarks are deterministic, meaning relevant values at all points across all runs are consistent.
+So while not completely equivalent due to address randomization, such noise should never leak to value space, and assuming values allocated are initialized before use, no remnants from other processes should leak to value space either.  %all the way through the execution compared to another run of the same program with the same input. %% FIXME: not necessarily true as loops exist
+This means that the cycles measured over infinitely many runs will converge towards a 'perfect' run with no cache misses as caused by context switching.
+Although realistically this will never happen in a lifetime, across \(n\) runs the run least affected by context switching will be the one with the least CPU cycles measured, so is the one most representative of the actual performance without noise.
 
-Measurements are made with the \lstinline!perf! utility, which relies on the \textit{hardware counters} (HC) registers of modern microprocessors, which are special purpose registers meant to record performance data live during execution. Because the analysis is integrated into the chip on which it is executing, very little overhead is incurred, and is therefore the go-to for estimating native performance.
+Measurements are made with the \lstinline!perf! utility, which relies on the \textit{hardware counters} (HC) registers of modern microprocessors, which are special purpose registers meant to record performance data during execution. Because the analysis is integrated into the chip on which it is executing, very little overhead is incurred, and is therefore the go-to for estimating native performance on Linux. The \lstinline!perf! subcommand is used, as it starts a process and attaches from the very beginning, in addition to padding a \lstinline!-e! flag specifying that only cycles are meant to be recorded and the \lstinline!-x! flag to help parse the output. Both min, avg and max are tracked and reported but only min are represented in the matrices below.
+
+Each \lstinline!.ll! file present in the \lstinline!benches! directory is listed here in a table denoting the input paramater on the left column and type of allocator used.
 
 %% NOTE: måske noget om hvordan intel laver sin egen arkitektur?
 
@@ -635,9 +664,7 @@ Measurements are made with the \lstinline!perf! utility, which relies on the \te
 % FIXME: husk at nævn hvordan størrelsen af kompileret kode har en indflydelse på performance
 
 
-\subsubsection{Measurements}
 
-Each \lstinline!.ll! file present in the \lstinline!benches! directory is listed here in a table denoting the input paramater on the left column and type of allocator used.
 
 
 
@@ -653,6 +680,115 @@ Each \lstinline!.ll! file present in the \lstinline!benches! directory is listed
 
 %Benchmarks are performed in the environment described by the Dockerfile in the repository and executed on an Apple Silicon/M1 chip. Time is measured using the \lstinline!time! function of the bash shell as it is native to the chosen Docker image.  As all execution relevant to the performance of register allocation is done in user mode, only the \lstinline!user! metric is noted.
 
+\subsubsection{\lstinline!benches/fib.ll!}
+The 'dumb' fib is a very naive approach to finding the \(n\)th number of the Fibonacci sequence by calling itself recursively twice (decrementing \(n\) before each), which causes an exponential growth in function calls.
+\begin{center}
+\begin{NiceTabular}{>{\columncolor{gray!10}}ccccccccc}
+\rowcolor{gray!10}n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
+20 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.23& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.23& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.23& \cellcolor[rgb]{0.8056640625,0.9990234375,0.75} 1.23& \cellcolor[rgb]{0.8056640625,0.9990234375,0.75} 1.22& \cellcolor[rgb]{0.8056640625,0.9990234375,0.75} 1.22& \cellcolor[rgb]{0.9990234375,0.9912109375,0.75} 2.23\\
+21 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8173828125,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.81640625,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.8173828125,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.8212890625,0.9990234375,0.75} 1.29& \cellcolor[rgb]{0.81640625,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.81640625,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.9990234375,0.9853515625,0.75} 2.44\\
+22 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.82421875,0.9990234375,0.75} 1.30& \cellcolor[rgb]{0.8232421875,0.9990234375,0.75} 1.29& \cellcolor[rgb]{0.8232421875,0.9990234375,0.75} 1.30& \cellcolor[rgb]{0.8212890625,0.9990234375,0.75} 1.29& \cellcolor[rgb]{0.8232421875,0.9990234375,0.75} 1.30& \cellcolor[rgb]{0.8232421875,0.9990234375,0.75} 1.29& \cellcolor[rgb]{0.9990234375,0.9794921875,0.75} 2.63\\
+23 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.8310546875,0.9990234375,0.75} 1.33& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.9990234375,0.9755859375,0.75} 2.75\\
+24 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.833984375,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.833984375,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.8349609375,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.8330078125,0.9990234375,0.75} 1.33& \cellcolor[rgb]{0.8330078125,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.8486328125,0.9990234375,0.75} 1.40& \cellcolor[rgb]{0.9990234375,0.97265625,0.75} 2.83\\
+25 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.9990234375,0.970703125,0.75} 2.89\\
+26 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8486328125,0.9990234375,0.75} 1.40& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.92\\
+27 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.96\\
+28 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.845703125,0.9990234375,0.75} 1.38& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.97\\
+29 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.98\\
+30 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8349609375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8349609375,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8330078125,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.8330078125,0.9990234375,0.75} 1.33& \cellcolor[rgb]{0.8349609375,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.91\\
+31 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.98\\
+32 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.38& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.38& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
+33 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.38& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
+34 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.38& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
+35 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
+36 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8427734375,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
+\end{NiceTabular}
+\end{center}
+The above measures are significantly equivalent to one another, with all allocators (except greedy 0) seeming to converge towards being 37\% slower than Clang. This isn't particularly surprising, as the x86 translation is more concerned with preserving callee saved registers than necessary in pushing each and every one despite not being in use. Also, instead of pushing with the \lstinline!push! instruction it would be faster to simply subtract from the \lstinline!%rsp! register directly and using \lstinline!mov! directly.
+
+What's more interesting and related to the allocation is the fact that greedy 0 is more than twice as slow. This is presumably because the \lstinline!fib! function that has 7 variables can assign each of them to a register for the first six allocators listed. However, the last one (greedy 0), has no assignable registers, so is forced to start spilling from the very beginning. To illusidate this hypothesis, here is the same benchmark but only for the greedy of decreasing \(k\) assignable registers:
+
+\begin{center}
+\begin{NiceTabular}{>{\columncolor{gray!10}}ccccccccc}
+\rowcolor{gray!10}n & clang & greedy 12 & greedy 8 & greedy 6 & greedy 4 & greedy 2 & greedy 1 & greedy 0 \\
+20 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8115234375,0.9990234375,0.75} 1.25& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.23& \cellcolor[rgb]{0.81640625,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8505859375,0.9990234375,0.75} 1.41& \cellcolor[rgb]{0.9990234375,0.9921875,0.75} 2.20& \cellcolor[rgb]{0.9990234375,0.9912109375,0.75} 2.24\\
+21 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8173828125,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.81640625,0.9990234375,0.75} 1.27& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.853515625,0.9990234375,0.75} 1.42& \cellcolor[rgb]{0.8642578125,0.9990234375,0.75} 1.46& \cellcolor[rgb]{0.9990234375,0.9853515625,0.75} 2.42& \cellcolor[rgb]{0.9990234375,0.984375,0.75} 2.46\\
+22 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.822265625,0.9990234375,0.75} 1.29& \cellcolor[rgb]{0.82421875,0.9990234375,0.75} 1.30& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.86328125,0.9990234375,0.75} 1.46& \cellcolor[rgb]{0.8759765625,0.9990234375,0.75} 1.51& \cellcolor[rgb]{0.9990234375,0.98046875,0.75} 2.57& \cellcolor[rgb]{0.9990234375,0.9794921875,0.75} 2.62\\
+23 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.32& \cellcolor[rgb]{0.84375,0.9990234375,0.75} 1.38& \cellcolor[rgb]{0.8740234375,0.9990234375,0.75} 1.50& \cellcolor[rgb]{0.88671875,0.9990234375,0.75} 1.55& \cellcolor[rgb]{0.9990234375,0.9775390625,0.75} 2.69& \cellcolor[rgb]{0.9990234375,0.9755859375,0.75} 2.74\\
+24 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8349609375,0.9990234375,0.75} 1.34& \cellcolor[rgb]{0.8642578125,0.9990234375,0.75} 1.46& \cellcolor[rgb]{0.8837890625,0.9990234375,0.75} 1.54& \cellcolor[rgb]{0.8935546875,0.9990234375,0.75} 1.58& \cellcolor[rgb]{0.9990234375,0.974609375,0.75} 2.78& \cellcolor[rgb]{0.9990234375,0.97265625,0.75} 2.83\\
+25 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35& \cellcolor[rgb]{0.8525390625,0.9990234375,0.75} 1.41& \cellcolor[rgb]{0.8837890625,0.9990234375,0.75} 1.54& \cellcolor[rgb]{0.896484375,0.9990234375,0.75} 1.59& \cellcolor[rgb]{0.9990234375,0.97265625,0.75} 2.83& \cellcolor[rgb]{0.9990234375,0.970703125,0.75} 2.89\\
+26 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.853515625,0.9990234375,0.75} 1.42& \cellcolor[rgb]{0.88671875,0.9990234375,0.75} 1.55& \cellcolor[rgb]{0.8994140625,0.9990234375,0.75} 1.60& \cellcolor[rgb]{0.9990234375,0.9716796875,0.75} 2.87& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.93\\
+27 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.857421875,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8876953125,0.9990234375,0.75} 1.56& \cellcolor[rgb]{0.90234375,0.9990234375,0.75} 1.61& \cellcolor[rgb]{0.9990234375,0.970703125,0.75} 2.89& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.95\\
+28 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8564453125,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8916015625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.904296875,0.9990234375,0.75} 1.62& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.92& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.97\\
+29 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8583984375,0.9990234375,0.75} 1.44& \cellcolor[rgb]{0.890625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.9052734375,0.9990234375,0.75} 1.62& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.92& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.98\\
+30 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8564453125,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.890625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.90625,0.9990234375,0.75} 1.63& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.93& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.98\\
+31 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.857421875,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8916015625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.9052734375,0.9990234375,0.75} 1.62& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.93& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
+32 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.8564453125,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.890625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.90625,0.9990234375,0.75} 1.63& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.92& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.98\\
+33 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.857421875,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8916015625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.90625,0.9990234375,0.75} 1.63& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.94& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
+34 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.857421875,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8916015625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.9052734375,0.9990234375,0.75} 1.63& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.94& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
+35 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.8408203125,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.857421875,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8916015625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.90625,0.9990234375,0.75} 1.63& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.93& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
+36 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37& \cellcolor[rgb]{0.83984375,0.9990234375,0.75} 1.36& \cellcolor[rgb]{0.857421875,0.9990234375,0.75} 1.43& \cellcolor[rgb]{0.8916015625,0.9990234375,0.75} 1.57& \cellcolor[rgb]{0.90625,0.9990234375,0.75} 1.63& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.94& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99\\
+\end{NiceTabular}
+\end{center}
+
+\subsubsection{\lstinline!benches/ackermann.ll!}
+
+Another benchmark that derives highly from the recursive structure of \lstinline!fib.ll! above is the Ackermann function.
+
+%TODO: bedøm om det giver mening
+
+%\begin{center}
+%\begin{tabular}{|c||c|c|c|c|c|c|c|c|c|c|c|} 
+ %\hline
+%& clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
+ %\hline
+%34 & \cellcolor{1.0, 1.0 , 1.0}1.00& 1.37& 1.37& 1.37& 1.37& 1.36& 1.41& 2.99\\
+%35 & 1.00& 1.39& 1.37& 1.41& 1.37& 1.37& 1.38& 3.00\\
+%36 & 1.00& 1.37& 1.37& 1.37& 1.37& 1.37& 1.38& 2.99\\
+%37 & 1.00& 1.38& 1.37& 1.37& 1.37& 1.39& 1.37& 2.99\\
+%38 & 1.00& 1.37& 1.37& 1.38& 1.37& 1.37& 1.37& 2.99\\
+%39 & 1.00& 1.37& 1.38& 1.37& 1.39& 1.37& 1.37& 2.99\\
+%40 & 1.00& 1.37& 1.37& 1.39& 1.37& 1.37& 1.37& 2.99\\
+%41 & 1.00& 1.37& 1.38& 1.37& 1.37& 1.37& 1.37& 2.99\\
+%42 & 1.00& 1.38& 1.38& 1.37& 1.37& 1.37& 1.37& 3.04\\
+ %\hline
+%\end{tabular}
+%\end{center}
+
+%\begin{center}
+%\begin{tabular}{|c||c|c|c|c|c|c|c|c|c|c|c|} 
+ %\hline
+%&clang& greedy 12 & greedy 8 & greedy 4 & greedy 2 & greedy 1 & greedy 0 \\
+ %\hline
+%34 & 1.00& 1.41& 1.37& 1.57& 1.63& 2.93& 3.04\\
+%35 & 1.00& 1.37& 1.38& 1.58& 1.66& 2.95& 3.01\\
+%36 & 1.00& 1.36& 1.40& 1.56& 1.66& 2.93& 2.98\\
+%37 & 1.00& 1.38& 1.38& 1.58& 1.64& 2.95& 3.01\\
+%38 & 1.00& 1.37& 1.37& 1.57& 1.64& 2.93& 3.04\\
+%39 & 1.00& 1.36& 1.37& 1.57& 1.63& 2.94& 3.04\\
+%40 & 1.00& 1.37& 1.37& 1.57& 1.63& 2.93& 3.04\\
+%41 & 1.00& 1.38& 1.41& 1.58& 1.67& 2.97& 3.03\\
+%42 & 1.00& 1.36& 1.37& 1.56& 1.62& 2.92& 2.98\\
+% \hline
+%\end{tabular}
+%\end{center}
+
+
+
+\subsubsection{\lstinline!benches/factori32.ll!}
+Prime factorization of \lstinline!i32!.
+\begin{center}
+\begin{tabular}{|c||c|c|c|c|} 
+ \hline
+ fib & clang & greedy & simple & linear \\ [0.5ex] 
+ \hline
+ 40 & 1.000000 & 1.438693 & 1.441270 & 0.73 \\ [1ex] 
+ 41 & 1.000000 & 1.441035 & 1.440626 & 0.73 \\ [1ex] 
+ 42 & 	1.000000 & 1.447140 & 1.446094 & 0\\
+ \hline
+\end{tabular}
+\end{center}
+
 %TODO:
 %
 %* should I use shell time, or /usr/bin/time?
@@ -665,19 +801,6 @@ Each \lstinline!.ll! file present in the \lstinline!benches! directory is listed
 %\end{tabular}
 %\end{center}
 
-\paragraph{fib.ll}
-The 'dumb' fib is a very naive approach to finding the \(n\)th number of the Fibonacci sequence by calling itself recursively twice (decrementing \(n\) before each), which causes an exponential growth in function calls.
-\begin{center}
-\begin{tabular}{|c||c|c|c|c|} 
- \hline
- fib & clang & greedy & simple & linear \\ [0.5ex] 
- \hline
- 40 & 1.000000 & 1.438693 & 1.441270 & 0.73 \\ [1ex] 
- 41 & 1.000000 & 1.441035 & 1.440626 & 0.73 \\ [1ex] 
- 42 & 	1.000000 & 1.447140 & 1.446094 & 0\\
- \hline
-\end{tabular}
-\end{center}
 
  
 
@@ -725,213 +848,4 @@ The 'dumb' fib is a very naive approach to finding the \(n\)th number of the Fib
     \item control flow operations \lstinline!br!, \lstinline!call! and \lstinline!ret!
     \item a  nullary block terminator \lstinline!unreachable!
 \end{enumerate}
-
-\section{Benchmarks}
-
-\subsection{\lstinline!benches/fib.ll!}
-\begin{lstlisting}[language=LLVM]
-declare i32 @atoi(i8*)
-define i32 @fib(i32 %n0) {
-  %cn =  icmp sle i32 %n0, 2
-  br i1 %cn, label %base, label %rec
-base:
-  ret i32 1
-rec:
-  %n1 = sub i32 %n0, 1
-  %v0 = call i32 @fib(i32 %n1)
-  %n2 = sub i32 %n0, 2
-  %v1 = call i32 @fib(i32 %n2)
-  %v2 = add i32 %v1, %v2
-  ret i32 %v2
-}
-define i32 @main(i32 %argc, i8** %argv) {
-  %arg1ptr = getelementptr i8*, i8** %argv, i64 1
-  %arg1 = load i8*, i8** %arg1ptr
-  %n = call i32 @atoi(i8* %arg1)
-  call i32 @fib(i32 %n)
-  ret i32 0
-}
-
-\end{lstlisting}
-
-\subsubsection{\lstinline!make fib-clang!}
-\begin{lstlisting}[language=none]
-$ make fib-clang
-clang -O0 -target x86_64-unknown-darwin benches/fib.ll -o fib-clang
-\end{lstlisting}
-\paragraph{\lstinline!make bench fib-clang 42!}
-\begin{lstlisting}[language=none]
-$ make bench fib-clang 42
-/usr/bin/time -al ./fib-clang 42
-        1.58 real         1.56 user         0.00 sys
-             2678784  maximum resident set size
-                   0  average shared memory size
-                   0  average unshared data size
-                   0  average unshared stack size
-                 765  page reclaims
-                   0  page faults
-                   0  swaps
-                   0  block input operations
-                   0  block output operations
-                   0  messages sent
-                   0  messages received
-                   0  signals received
-                   0  voluntary context switches
-                  29  involuntary context switches
-         11000239251  instructions retired
-          4962802652  cycles elapsed
-             1708928  peak memory footprint
-\end{lstlisting}
-\paragraph{\lstinline!make bench fib-clang 43!}
-\begin{lstlisting}[language=none]
-make bench fib-clang 43
-$ /usr/bin/time -al ./fib-clang 43
-        2.71 real         2.49 user         0.00 sys
-             2678784  maximum resident set size
-                   0  average shared memory size
-                   0  average unshared data size
-                   0  average unshared stack size
-                 700  page reclaims
-                  66  page faults
-                   0  swaps
-                   0  block input operations
-                   0  block output operations
-                   0  messages sent
-                   0  messages received
-                   0  signals received
-                  13  voluntary context switches
-                  32  involuntary context switches
-         17797124508  instructions retired
-          8035601598  cycles elapsed
-             1708928  peak memory footprint
-\end{lstlisting}
-
-\paragraph{\lstinline!make bench fib-clang 44!}
-\begin{lstlisting}[language=none]
-$ make bench fib-clang 44
-/usr/bin/time -al ./fib-clang 44
-        4.06 real         4.04 user         0.00 sys
-             2678784  maximum resident set size
-                   0  average shared memory size
-                   0  average unshared data size
-                   0  average unshared stack size
-                 700  page reclaims
-                  66  page faults
-                   0  swaps
-                   0  block input operations
-                   0  block output operations
-                   0  messages sent
-                   0  messages received
-                   0  signals received
-                   5  voluntary context switches
-                  29  involuntary context switches
-         28781328564  instructions retired
-         12988681489  cycles elapsed
-             1708928  peak memory footprint
-\end{lstlisting}
-
-
-\paragraph{\lstinline!make bench fib-clang 45!}
-\begin{lstlisting}[language=none]
-$ make bench fib-clang 45
-/usr/bin/time -al ./fib-clang 45
-        6.54 real         6.51 user         0.00 sys
-             2678784  maximum resident set size
-                   0  average shared memory size
-                   0  average unshared data size
-                   0  average unshared stack size
-                 700  page reclaims
-                  66  page faults
-                   0  swaps
-                   0  block input operations
-                   0  block output operations
-                   0  messages sent
-                   0  messages received
-                   0  signals received
-                   6  voluntary context switches
-                  39  involuntary context switches
-         46555259189  instructions retired
-         20968319385  cycles elapsed
-             1708928  peak memory footprint
-\end{lstlisting}
-
-
-
-\paragraph{\lstinline!make bench fib-clang 46!}
-\begin{lstlisting}[language=none]
-$ make bench fib-clang 46
-/usr/bin/time -al ./fib-clang 46
-       10.58 real        10.54 user         0.00 sys
-             2678784  maximum resident set size
-                   0  average shared memory size
-                   0  average unshared data size
-                   0  average unshared stack size
-                 700  page reclaims
-                  66  page faults
-                   0  swaps
-                   0  block input operations
-                   0  block output operations
-                   0  messages sent
-                   0  messages received
-                   0  signals received
-                   5  voluntary context switches
-                 107  involuntary context switches
-         75314385847  instructions retired
-         33939361073  cycles elapsed
-             1725376  peak memory footprint
-\end{lstlisting}
-
-
-
-\paragraph{\lstinline!make bench fib-clang 47!}
-\begin{lstlisting}[language=none]
-$ make bench fib-clang 47
-/usr/bin/time -al ./fib-clang 47
-       17.09 real        17.06 user         0.00 sys
-             2678784  maximum resident set size
-                   0  average shared memory size
-                   0  average unshared data size
-                   0  average unshared stack size
-                 766  page reclaims
-                   0  page faults
-                   0  swaps
-                   0  block input operations
-                   0  block output operations
-                   0  messages sent
-                   0  messages received
-                   0  signals received
-                   0  voluntary context switches
-                 100  involuntary context switches
-        121838577947  instructions retired
-         54901966523  cycles elapsed
-             1708928  peak memory footprint
-\end{lstlisting}
-
-
-
-\paragraph{\lstinline!make bench fib-clang 48!}
-\begin{lstlisting}[language=none]
-$ make bench fib-clang 48
-/usr/bin/time -al ./fib-clang 48
-       27.65 real        27.59 user         0.00 sys
-             2678784  maximum resident set size
-                   0  average shared memory size
-                   0  average unshared data size
-                   0  average unshared stack size
-                 766  page reclaims
-                   0  page faults
-                   0  swaps
-                   0  block input operations
-                   0  block output operations
-                   0  messages sent
-                   0  messages received
-                   0  signals received
-                   0  voluntary context switches
-                 161  involuntary context switches
-        197130073055  instructions retired
-         88835375488  cycles elapsed
-             1708928  peak memory footprint
-\end{lstlisting}
-
-
 \end{document}
