@@ -334,11 +334,11 @@ Building a graph is relatively straight forward, with the input for every functi
 type cfg = (lbl option * block) * (lbl * block) list
 \end{minted}
 \end{center}
-which consists of an optionally named entry block in the first part and a list of trailing blocks that are always named in the second.
+which consists of an optionally named entry block in the first part and a list of trailing blocks that are always named in the second. The reason for the first block to be optionally named is the fact that \textit{some} LLVM programs transfer control back to the point of entry, whereas every subsequent block needs to be named because branching can only target it by its name.
 
 %* description of blocks, how they connect etc.
 
-Each function defined in an LLVM program is constructed with the help of
+%Each function defined in an LLVM program is constructed with the help of
 
 \section{Liveness Analysis}
 
@@ -624,7 +624,7 @@ The primary text is \textit{Linear Scan Register Allocation} (\cite{linear}), th
 
 \subsection{\lstinline!LLVM--! instruction set}
 
-The intermediate representation emitted by the frontend of a compiler serves as a stepping stone independent of the target architecture. The \lstinline!LLVM! infrastructure is the industry standard in terms of bridging this gap and was consequently the library used to translate the semantically annotated abstract syntax tree to executable machine code in the 2022 compilers course. As this project is an expansion on this, it follows naturally to build on this. 
+%The intermediate representation emitted by the frontend of a compiler serves as a stepping stone independent of the target architecture. The \lstinline!LLVM! infrastructure is the industry standard in terms of bridging this gap and was consequently the library used to translate the semantically annotated abstract syntax tree to executable machine code in the 2022 compilers course. As this project is an expansion on this, it follows naturally to build on this. 
 
 The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as, for instance, neither of the languages implemented support exception handling, floating point operations and so on, and instead only strive to cover the basics of compilers.
 
@@ -639,7 +639,17 @@ The instructions included are
 %\end{enumerate}
 The branching for most of these is trivial: after successful execution the flow of all but \lstinline!br!, \lstinline!ret! and \lstinline!unreachable! will unconditionally attempt to execute the next instruction in memory (i.e. increment the instruction pointer by instruction length).
 
-Because of this, these instructions are referred to as \textit{terminators}, as their purpose is to disrupt what had otherwise been a linear flow from the beginning of this continus sequence of instructions, henceforth referred to as a \textit{basic block}.
+%Because of this, these instructions are referred to as \textit{terminators}, as their purpose is to disrupt what had otherwise been a linear flow from the beginning of this continus sequence of instructions, henceforth referred to as a \textit{basic block}.
+
+\label{appendix:llvmis}
+\begin{enumerate}
+    \item binary operations \lstinline!add!, \lstinline!and!, \lstinline!ashr!, \lstinline!lshr!, \lstinline!mul!, \lstinline!or!, \lstinline!sdiv!,\\\lstinline!srem!, \lstinline!shl!, \lstinline!sub! and \lstinline!xor!
+    \item integer comparison \lstinline!icmp! (conditions being \lstinline!eq!, \lstinline!ne!, \lstinline!sge!, \lstinline!sgt!, \lstinline!sle! and \lstinline!slt!)
+    \item memory/address operations \lstinline!alloca!, \lstinline!gep!, \lstinline!load! and \lstinline!store!
+    \item  \lstinline!mov! operations \lstinline!gep!, \lstinline!phi!, \lstinline!ptrtoint!, \lstinline!trunc!, and \lstinline!zext!
+    \item control flow operations \lstinline!br!, \lstinline!call! and \lstinline!ret!
+    \item a  nullary block terminator \lstinline!unreachable!
+\end{enumerate}
 
 %%%
 \subsection{Translating \lstinline!LLVM--! to x86}
@@ -667,6 +677,12 @@ An example of this would be the division/remainder operation: since integer divi
  \hline
 \end{tabular}
 \end{center}
+
+
+\subsubsection{Implementing \mintinline{llvm}{call} operation}
+
+The \mintinline{llvm}{call} operation is by far the most complicated one. Mostly because of calling conventions,
+The \mintinline{gas}{%rax} register is zeroed before 
 
 %* safest possible x86 translation
 %
@@ -898,6 +914,28 @@ n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & g
 \hline
 \end{NiceTabular}
 
+\subsubsection{\lstinline!benches/fannkuch-redux.ll!}
+\begin{table}[!ht]
+\begin{center}
+\begin{NiceTabular}{|c|cccccccc|}
+\hline
+arg(s) & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
+\hline
+4 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 172157& \cellcolor[rgb]{0.759765625,0.9990234375,0.75} 1.04312x& \cellcolor[rgb]{0.7568359375,0.9990234375,0.75} 1.02806x& \cellcolor[rgb]{0.751953125,0.9990234375,0.75} 1.00936x& \cellcolor[rgb]{0.767578125,0.9990234375,0.75} 1.07378x& \cellcolor[rgb]{0.806640625,0.9990234375,0.75} 1.23096x& \cellcolor[rgb]{0.7998046875,0.9990234375,0.75} 1.20263x& \cellcolor[rgb]{0.810546875,0.9990234375,0.75} 1.24619x\\
+5 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 277849& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.71875x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.74478x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.72175x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.74462x& \cellcolor[rgb]{0.7978515625,0.9990234375,0.75} 1.19407x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18339x& \cellcolor[rgb]{0.8017578125,0.9990234375,0.75} 1.20806x\\
+6 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 307924& \cellcolor[rgb]{0.8125,0.9990234375,0.75} 1.25112x& \cellcolor[rgb]{0.82421875,0.9990234375,0.75} 1.30051x& \cellcolor[rgb]{0.810546875,0.9990234375,0.75} 1.24357x& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32219x& \cellcolor[rgb]{0.9990234375,0.9423828125,0.75} 3.80349x& \cellcolor[rgb]{0.9990234375,0.9404296875,0.75} 3.86493x& \cellcolor[rgb]{0.9990234375,0.94140625,0.75} 3.84259x\\
+7 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1312806& \cellcolor[rgb]{0.87890625,0.9990234375,0.75} 1.52113x& \cellcolor[rgb]{0.9052734375,0.9990234375,0.75} 1.62393x& \cellcolor[rgb]{0.8779296875,0.9990234375,0.75} 1.51710x& \cellcolor[rgb]{0.9052734375,0.9990234375,0.75} 1.62624x& \cellcolor[rgb]{0.9990234375,0.86328125,0.75} 6.35235x& \cellcolor[rgb]{0.9990234375,0.8515625,0.75} 6.70982x& \cellcolor[rgb]{0.9990234375,0.8642578125,0.75} 6.31152x\\
+8 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 11168259& \cellcolor[rgb]{0.900390625,0.9990234375,0.75} 1.60627x& \cellcolor[rgb]{0.9189453125,0.9990234375,0.75} 1.67856x& \cellcolor[rgb]{0.947265625,0.9990234375,0.75} 1.79351x& \cellcolor[rgb]{0.9140625,0.9990234375,0.75} 1.66070x& \cellcolor[rgb]{0.9990234375,0.8349609375,0.75} 7.25991x& \cellcolor[rgb]{0.9990234375,0.833984375,0.75} 7.29830x& \cellcolor[rgb]{0.9990234375,0.83984375,0.75} 7.09878x\\
+9 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 115754944& \cellcolor[rgb]{0.900390625,0.9990234375,0.75} 1.60476x& \cellcolor[rgb]{0.9296875,0.9990234375,0.75} 1.72352x& \cellcolor[rgb]{0.9052734375,0.9990234375,0.75} 1.62536x& \cellcolor[rgb]{0.9208984375,0.9990234375,0.75} 1.68769x& \cellcolor[rgb]{0.9990234375,0.828125,0.75} 7.46779x& \cellcolor[rgb]{0.9990234375,0.8173828125,0.75} 7.81576x& \cellcolor[rgb]{0.9990234375,0.83203125,0.75} 7.36417x\\
+10 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1352747472& \cellcolor[rgb]{0.8857421875,0.9990234375,0.75} 1.54700x& \cellcolor[rgb]{0.935546875,0.9990234375,0.75} 1.74875x& \cellcolor[rgb]{0.89453125,0.9990234375,0.75} 1.58381x& \cellcolor[rgb]{0.9169921875,0.9990234375,0.75} 1.67440x& \cellcolor[rgb]{0.9990234375,0.818359375,0.75} 7.77269x& \cellcolor[rgb]{0.9990234375,0.8193359375,0.75} 7.74449x& \cellcolor[rgb]{0.9990234375,0.8173828125,0.75} 7.82170x\\
+11 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 16942071879& \cellcolor[rgb]{0.88671875,0.9990234375,0.75} 1.55031x& \cellcolor[rgb]{0.9267578125,0.9990234375,0.75} 1.71033x& \cellcolor[rgb]{0.8876953125,0.9990234375,0.75} 1.55567x& \cellcolor[rgb]{0.9228515625,0.9990234375,0.75} 1.69492x& \cellcolor[rgb]{0.9990234375,0.814453125,0.75} 7.92913x& \cellcolor[rgb]{0.9990234375,0.8017578125,0.75} 8.32639x& \cellcolor[rgb]{0.9990234375,0.8212890625,0.75} 7.70198x\\
+12 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 235117543385& \cellcolor[rgb]{0.8974609375,0.9990234375,0.75} 1.59287x& \cellcolor[rgb]{0.923828125,0.9990234375,0.75} 1.70029x& \cellcolor[rgb]{0.8798828125,0.9990234375,0.75} 1.52228x& \cellcolor[rgb]{0.927734375,0.9990234375,0.75} 1.71456x& \cellcolor[rgb]{0.9990234375,0.8095703125,0.75} 8.05498x& \cellcolor[rgb]{0.9990234375,0.8095703125,0.75} 8.08426x& \cellcolor[rgb]{0.9990234375,0.806640625,0.75} 8.17452x\\
+\hline
+\end{NiceTabular}
+\caption{\label{tab:fannkuch}Benchmark of \texttt{benches/sieven.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
+\end{center}
+\end{table}
+
 
 
 
@@ -922,16 +960,6 @@ n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & g
 \newpage
 
 %%% NOTE: Don't include subsections of tthe benchmarks section
-\addtocontents{toc}{\protect\setcounter{tocdepth}{1}}
+%\addtocontents{toc}{\protect\setcounter{tocdepth}{1}}
 
-\section{LLVM-- instruction set}
-\label{appendix:llvmis}
-\begin{enumerate}
-    \item binary operations \lstinline!add!, \lstinline!and!, \lstinline!ashr!, \lstinline!lshr!, \lstinline!mul!, \lstinline!or!, \lstinline!sdiv!,\\\lstinline!srem!, \lstinline!shl!, \lstinline!sub! and \lstinline!xor!
-    \item integer comparison \lstinline!icmp! (conditions being \lstinline!eq!, \lstinline!ne!, \lstinline!sge!, \lstinline!sgt!, \lstinline!sle! and \lstinline!slt!)
-    \item memory/address operations \lstinline!alloca!, \lstinline!gep!, \lstinline!load! and \lstinline!store!
-    \item  \lstinline!mov! operations \lstinline!gep!, \lstinline!phi!, \lstinline!ptrtoint!, \lstinline!trunc!, and \lstinline!zext!
-    \item control flow operations \lstinline!br!, \lstinline!call! and \lstinline!ret!
-    \item a  nullary block terminator \lstinline!unreachable!
-\end{enumerate}
 \end{document}
