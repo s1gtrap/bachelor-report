@@ -276,8 +276,10 @@ _add:
 
 \subsection{Static Single-Assignment form}
 In compiler backends, \textit{Static Single-Assignment} (SSA) form is a property that applies to some IR, including LLVM.
-It is a way of representing a program in such a way that each variable is assigned only once throughout
-the scope of the function. Each use of the variable after definition then refers to the value  of that initial assignment.
+It is a way of representing a program such that each variable is assigned only once throughout
+the scope of the function. Each use of the variable after definition then refers to the value  of that  single assignment, and any operations are applied by assigning the result of said operation to a freshly defined variable.
+
+%Obviously, that 
 %In other words, every variable is assigned a unique version number for each assignment, and these versions are used consistently throughout the program.
 
 \section{Control Flow Analysis}
