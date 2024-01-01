@@ -1,5 +1,5 @@
 \documentclass{article}
-\usepackage[style=apa]{biblatex}
+\usepackage[style=ieee]{biblatex}
 
 
 \bibliography{article}
@@ -231,9 +231,9 @@ Instead of translating directly from a source language to target machine code, m
 It is by no means executable on either \(A\) or \(B\), but it is much closer to the instruction set executed on a CPU than the source language originally fed to the frontend.  This helps portability immensely, as a frontend emitting an IR no longer needs to specialize to a particular architecture, instead it can target as many as the backend supports.
 Likewise, a compiler backend will support any frontend provided that they emit correct IR.
 
-Because of this, compilation of high-level programming languages will often go no further than emitting IR, then leave the rest for a subsequent backend toolchain. This naturally leads to the LLVM toolchain, which is by far the most used compiler backend. Most languages, if targeting native execution on a CPU, will have an LLVM implementation. This is true for C and C++ (clang and clang++ respectively), D (with the ldc compiler), Swift and Rust, to name a few.
+Because of this, compilation of high-level programming languages will often go no further than emitting IR, then leave the rest for a subsequent backend toolchain. This naturally leads to the LLVM toolchain, which is by far the most used compiler backend in practice. Most languages, if targeting native execution on a CPU, will have an LLVM implementation. This is true for C/C++ (Clang compiler \cite{clang}), D (LDC compiler \cite{dlang}), Swift (official Swift compiler \cite{swift}) and Rust (officlal \texttt{rustc} compiler \cite{rustc}). The use of LLVM allows for them to be compiled to completely unforeseen architectures, like web browsers with WebAssembly or even graphics cards with compute kernels \cite{backend}.
 
-Conversely, managed languages such as Java and C\# typically don't depend on the LLVM toolchain directly, some research projects attempt to compile associated VM bytecode to a native platform using LLVM (\cite{dotnet}).
+Conversely, managed languages such as Java and C\# target their own respective VMs, so typically don't have much to gain from the LLVM toolchain. That said, some projects have attempted to implement LLVM in their translation of bytecode to native architectures,  such as LLILC which promised both \textit{just-in-time} (JIT) as well as \textit{ahead-of-time} (AOT) compilation \cite{dotnet}. Similarly, Kotlin (the spiritual successor to Java) that ordinarily targets the JVM has a native backend that compiles directly to machine code using LLVM, circumventing the need for a VM entirely \cite{kotlin}.
 %Meanwhile interpreted languages like JavaScript eagerly attempt use LLVM for \textit{just-in-time} (JIT) compilation % FIXME: this is not true at all lol
 
 The modularization of the frontend and backend stages also helps immensely.
@@ -252,22 +252,30 @@ int add(int a, int b) {
    \begin{minipage}{0.48\textwidth}
      \centering
      \begin{minted}[bgcolor=LightGray]{llvm}
-define i32 @add(i32 %a, i32 %b) {
-  %sum = add i32 %a, %b
-  ret i32 %sum
+define i32 @add (i32 %0, i32 %1) {
+ %3 = add i32 %1, %0
+ ret i32 %3
 }
      \end{minted}
-     \caption{Corresponding represented in LLVM}\label{fig:addll}
+     \caption{Stripped \texttt{clang -O1 -S -emit-llvm}}\label{fig:addll}
    \end{minipage}
    \begin{center}
-   \begin{minipage}{0.48\textwidth}
+   \begin{minipage}{0.83\textwidth}
      \centering
      \begin{minted}[bgcolor=LightGray]{gas}
-  .globl _add
-_add:
-  movl	%edi, %eax
-  addl	%esi, %eax
-  retq
+	.section	__TEXT,__text,regular,pure_instructions
+	.build_version macos, 14, 0
+	.globl	_add              ## -- Begin function add
+	.p2align	4, 0x90
+_add:                                   ## @add
+	.cfi_startproc
+## %bb.0:
+	movl	%esi, %eax
+	addl	%edi, %eax
+	retq
+	.cfi_endproc
+                                        ## -- End function
+.subsections_via_symbols
      \end{minted}
      \caption{Prettified result of \mintinline{bash}{clang -O0}}\label{fig:addx86}
    \end{minipage}
@@ -279,6 +287,8 @@ _add:
 In compiler backends, \textit{Static Single-Assignment} (SSA) form is a property that applies to some IR, including LLVM.
 It is a way of representing a program such that each variable is assigned only once throughout
 the scope of the function. Each use of the variable after definition then refers to the value  of that  single assignment, and any operations are applied by assigning the result of said operation to a freshly defined variable.
+
+This approach seeks to benefit
 
 %Obviously, that 
 %In other words, every variable is assigned a unique version number for each assignment, and these versions are used consistently throughout the program.
@@ -359,15 +369,23 @@ variables that are live at the same time (i.e. at intersecting program points) c
 
 For instance, suppose a function that calls another:
 
+\begin{figure}[h]
 \begin{minted}[linenos,bgcolor=LightGray]{llvm}
 define i32 @countcall(i32 %x0) {
   %x1 = add i32 %x0, 1
+  call void @printInt(i32 %x1)
   call ptr @subproc()
   ret i32 %x1
 }
 \end{minted}
-Because of the halting problem, static analysis cannot determine if the call to \lstinline!@subproc! will return for every possible implementation.  %which may or may not return control to the calling function:
-So when assigning \lstinline!%x1! a register it is undecidable whether the variable must be live in the last return instruction, i.e. needs to live across the call to another. Because of this, any sound approach to liveness analysis will be an approximation.
+
+\caption{\label{fig:undecidable}Increment, print and possibly return argument}
+\end{figure}
+\noindent Because of the halting problem, static analysis cannot necessarily determine if the call to \lstinline!@subproc! will return.  %which may or may not return control to the calling function:
+So when assigning \lstinline!%x1! a register it is undecidable whether the variable must be live in the return instruction on line 5 in Figure \ref{fig:undecidable}.
+A register must be assigned to \texttt{\%x1}, as it is used on line 3, although whether it must live across function calls can reduce the possible registers depending on the target platform and its calling conventions. % TODO: kan udvides
+Because of this, any sound approach to liveness analysis will be an approximation.
+
 
 In some cases it is simply impossible to assign each variable its own register without conflict along interference edges, in which case one or more variables need to be assigned to memory instead. This is also referred to as \textit{spilling} the variable/register to the stack, or the variable itself is referred to as \textit{spilled}.
 
@@ -403,7 +421,7 @@ Control-flow constraints on the other hand propagate the use of variables to pre
 %The dataflow analysis approach builds the set of variables that 
 %Each type of instruction has some semantic attributes that are applied to the system state upon execution. This change is also referres to as a \textit{transfer function} as it transitions from one state to another.
 %can be thought of as a \textit{transfer function} in terms of liveness, denoting which variables may be live before and after execution.
-Initially, two sets are associated with each instruction: the \textit{live-in} and \textit{live-out} sets, which are the sets of variables that are live respectively before and after execution. Then the two equations above are applied iteratively until a fixed point is reached, i.e. an invariant point where neither \(\mathit{in}[n]\) or \(\mathit{out}[n]\) is changed for all instructions \(n\).
+Initially, two empty sets are associated with each instruction: the \textit{live-in} and \textit{live-out} sets, which are the sets of variables that are live respectively before and after execution. Then the two equations above are applied iteratively until a fixed point is reached, i.e. an invariant point where neither \(\mathit{in}[n]\) or \(\mathit{out}[n]\) is changed for all instructions \(n\).
 
 % TODO: onwards!
 
@@ -466,7 +484,7 @@ module SS = Set.Make (struct
 end)
 type set = SS.t
 \end{minted}
-With the actual fixed-point iteration performed as follows:
+With the actual dataflow analysis performed recursively as follows:
 \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
 let dataflow (insns : Cfg.insn list) (ids : Cfg.G.V.t array) (g : Cfg.G.t) =
   let insns = List.mapi (fun i v -> (i, v)) insns |> List.rev in
@@ -501,6 +519,7 @@ let flowout (i, _) =
   if changed then out.(i) <- newout;
   changed
 \end{minted}
+To 
 
 
 \subsection{Interference Graph}
