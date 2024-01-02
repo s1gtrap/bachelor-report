@@ -35,6 +35,7 @@
 \usepackage{collcell}
 \usepackage{varwidth}
 \usepackage{booktabs}
+\usepackage{float}
 
 \definecolor{LightGray}{gray}{0.97}
 
@@ -384,11 +385,11 @@ The control flow of a given program refers to the order in which instructions ar
 % mention basic block early on, they're a contiguous sequence of instructions that do not transfer control flow
 
 A continuous flow of instructions is referred to as a \textit{basic block}, defined as a sequence of instructions with no branches in or out except for the first instruction (referred to as a \textit{leader}, immediately following either the function entry or label within it) and the last (referred to as a \textit{terminator}, as it either terminates or transfers the flow of execution). %These are often referred to as terminators and can be thought of as an entirely different categoriy of instructions. % TODO: måske drop 'can be thought of'
-In order to represent the order in which instructions are executed, a \textit{control flow graph} (CFG) is introduced. It is a directed graph whose edges represent transfer of control. The type of node varies over the source material, with CFGs of the Appel text constructed over individual instructions (\cite{tiger}) and the Aho text over basic blocks (\cite{dragon}).
-Either way, leaders have a set of predecessors and terminators a set of successors associated with them.
+In order to represent the order in which instructions are executed, a \textit{control flow graph} (CFG) is introduced. It is a directed graph whose edges represent transfer of control. The type of node varies over the source material, with CFGs of the Appel text \cite{tiger} constructed over individual instructions  and the Aho text \cite{dragon} over basic blocks.
+Either way, leaders will have a set of predecessors and terminators a set of successors associated with them.
 
 Terminators have one or two successors in the case of branching or none at all in the case of function exit. % These can either be associated basic blocks or individual instructions that make it up.
-Unconditional branching always transfers control to the block labelled, meaning only one successor follows, whereas conditional branching could transfer to either of the two, but because control flow analysis is not concerned with data, both are considered as possible successors. % TODO: rets 
+Unconditional branching always transfers control to the block labelled, meaning only one successor follow, whereas conditional branching could transfer to either of the two, but because control flow analysis is not concerned with data, both are considered as possible successors. % TODO: rets 
 
 Successors of node \(n\) are denoted \( \mathit{succ}[n], \)
 and while each node also has predecessors associated, which consist of an  unbounded number of nodes from which control may be transferred, it isn't particularly useful in the following analysis.
@@ -864,8 +865,8 @@ Each \lstinline!.ll! file present in the \lstinline!benches! directory is listed
 
 \subsubsection{\lstinline!benches/fib.ll!}
 The 'dumb' fib is a very naive approach to finding the \(n\)th number of the Fibonacci sequence by calling itself recursively twice (decrementing \(n\) before each), which causes an exponential growth in function calls.
-\begin{table}[!ht]
-\begin{center}
+\begin{table}[H]
+\makebox[\textwidth][c]{
 \begin{NiceTabular}{|c|cccccccc|}
 \hline
 n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
@@ -884,16 +885,15 @@ n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & g
 30 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8515625,0.9990234375,0.75} 1.41137x& \cellcolor[rgb]{0.8505859375,0.9990234375,0.75} 1.40745x& \cellcolor[rgb]{0.8515625,0.9990234375,0.75} 1.41125x& \cellcolor[rgb]{0.8505859375,0.9990234375,0.75} 1.40768x& \cellcolor[rgb]{0.8515625,0.9990234375,0.75} 1.40935x& \cellcolor[rgb]{0.8505859375,0.9990234375,0.75} 1.40589x& \cellcolor[rgb]{0.9990234375,0.96484375,0.75} 3.08506x\\
 32 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.853515625,0.9990234375,0.75} 1.41590x& \cellcolor[rgb]{0.8525390625,0.9990234375,0.75} 1.41255x& \cellcolor[rgb]{0.853515625,0.9990234375,0.75} 1.41652x& \cellcolor[rgb]{0.8525390625,0.9990234375,0.75} 1.41300x& \cellcolor[rgb]{0.8525390625,0.9990234375,0.75} 1.41399x& \cellcolor[rgb]{0.8515625,0.9990234375,0.75} 1.41115x& \cellcolor[rgb]{0.9990234375,0.9638671875,0.75} 3.09890x\\
 \hline
-\end{NiceTabular}
+\end{NiceTabular}}
 \caption{\label{tab:dumb-fib}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
-\end{center}
 \end{table}
 
 The measures in \ref{tab:dumb-fib}  are significantly equivalent to one another, with all allocators (except greedy 0) seeming to converge towards being 37\% slower than Clang. This isn't particularly surprising, as the x86 translation is more concerned with preserving callee saved registers than necessary in pushing each and every one despite not being in use. Also, instead of pushing with the \lstinline!push! instruction it would be faster to simply subtract from the \lstinline!%rsp! register directly and using \lstinline!mov! directly.
 
 What's more interesting and related to the allocation is the fact that greedy 0 is more than twice as slow. This is presumably because the \lstinline!fib! function that has 7 variables can assign each of them to a register for the first six allocators listed. However, the last one (greedy 0), has no assignable registers, so it must necessarily start spilling from the very beginning. To elucidate this hypothesis, here is the same benchmark but only for the greedy of decreasing \(k\) assignable registers:
-\begin{table}[!ht]
-\begin{center}
+\begin{table}[H]
+\makebox[\textwidth][c]{
 \begin{NiceTabular}{|c|ccccccccc|}
 \hline
 n & clang & greedy 12 & greedy 8 & greedy 6 & greedy 4 & greedy 2 & greedy 1 & greedy 0 & tiger \\
@@ -912,9 +912,9 @@ n & clang & greedy 12 & greedy 8 & greedy 6 & greedy 4 & greedy 2 & greedy 1 & g
 30 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.35807x& \cellcolor[rgb]{0.8388671875,0.9990234375,0.75} 1.35784x& \cellcolor[rgb]{0.85546875,0.9990234375,0.75} 1.42732x& \cellcolor[rgb]{0.888671875,0.9990234375,0.75} 1.55842x& \cellcolor[rgb]{0.904296875,0.9990234375,0.75} 1.62109x& \cellcolor[rgb]{0.9990234375,0.9697265625,0.75} 2.92283x& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.98079x& \cellcolor[rgb]{0.9990234375,0.990234375,0.75} 2.28148x\\
 32 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.36987x& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.36911x& \cellcolor[rgb]{0.8583984375,0.9990234375,0.75} 1.43879x& \cellcolor[rgb]{0.892578125,0.9990234375,0.75} 1.57453x& \cellcolor[rgb]{0.9072265625,0.9990234375,0.75} 1.63423x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.94896x& \cellcolor[rgb]{0.9990234375,0.966796875,0.75} 3.00741x& \cellcolor[rgb]{0.9990234375,0.9892578125,0.75} 2.29882x\\
 \hline
-\end{NiceTabular}
+\end{NiceTabular}}
 \caption{\label{tab:dumb-fib-greedy}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
-\end{center}
+
 \end{table}
 
 \subsubsection{\lstinline!benches/ackermann.ll!}
@@ -929,8 +929,8 @@ Another benchmark that derives highly from the recursive structure of \lstinline
 \subsubsection{\lstinline!benches/factori32.ll!}
 
 Prime factorization of \lstinline!i32!.
-\begin{table}[!ht]
-\begin{center}
+\begin{table}[H]
+\makebox[\textwidth][c]{
 \begin{NiceTabular}{|c|cccccccc|}
 \hline
 n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
@@ -944,14 +944,13 @@ n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & g
 17179869143 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.31790x& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32297x& \cellcolor[rgb]{0.8310546875,0.9990234375,0.75} 1.32585x& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32452x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.96961x& \cellcolor[rgb]{0.9990234375,0.900390625,0.75} 5.15949x& \cellcolor[rgb]{0.9990234375,0.9033203125,0.75} 5.07055x\\
 34359738337 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.34905x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.34969x& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.34780x& \cellcolor[rgb]{0.845703125,0.9990234375,0.75} 1.38507x& \cellcolor[rgb]{0.9990234375,0.96484375,0.75} 3.08190x& \cellcolor[rgb]{0.9990234375,0.8935546875,0.75} 5.37886x& \cellcolor[rgb]{0.9990234375,0.892578125,0.75} 5.39434x\\
 \hline
-\end{NiceTabular}
+\end{NiceTabular}}
 \caption{\label{tab:factori32}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
-\end{center}
 \end{table}
 
 \subsubsection{\lstinline!benches/factori64.ll!}
-\begin{table}[!ht]
-\begin{center}
+\begin{table}[H]
+\makebox[\textwidth][c]{
 \begin{NiceTabular}{|c|cccccccc|}
 \hline
 n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
@@ -965,14 +964,13 @@ n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & g
 17179869143 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8291015625,0.9990234375,0.75} 1.31790x& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32297x& \cellcolor[rgb]{0.8310546875,0.9990234375,0.75} 1.32585x& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32452x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.96961x& \cellcolor[rgb]{0.9990234375,0.900390625,0.75} 5.15949x& \cellcolor[rgb]{0.9990234375,0.9033203125,0.75} 5.07055x\\
 34359738337 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.34905x& \cellcolor[rgb]{0.8369140625,0.9990234375,0.75} 1.34969x& \cellcolor[rgb]{0.8359375,0.9990234375,0.75} 1.34780x& \cellcolor[rgb]{0.845703125,0.9990234375,0.75} 1.38507x& \cellcolor[rgb]{0.9990234375,0.96484375,0.75} 3.08190x& \cellcolor[rgb]{0.9990234375,0.8935546875,0.75} 5.37886x& \cellcolor[rgb]{0.9990234375,0.892578125,0.75} 5.39434x\\
 \hline
-\end{NiceTabular}
+\end{NiceTabular}}
 \caption{\label{tab:factori64-table}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
-\end{center}
 \end{table}
 
 \subsubsection{\lstinline!benches/sieven.ll!}
-\begin{table}[!ht]
-\begin{center}
+\begin{table}[H]
+\makebox[\textwidth][c]{
 \begin{NiceTabular}{|c|cccccccc|}
 \hline
 arg(s) & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
@@ -986,12 +984,13 @@ arg(s) & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 1
 8192 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 424179& \cellcolor[rgb]{0.7763671875,0.9990234375,0.75} 1.10601x& \cellcolor[rgb]{0.78125,0.9990234375,0.75} 1.12721x& \cellcolor[rgb]{0.7763671875,0.9990234375,0.75} 1.10683x& \cellcolor[rgb]{0.78125,0.9990234375,0.75} 1.12700x& \cellcolor[rgb]{0.9990234375,0.8037109375,0.75} 8.26470x& \cellcolor[rgb]{0.9990234375,0.78515625,0.75} 8.85856x& \cellcolor[rgb]{0.9990234375,0.7783203125,0.75} 9.07318x\\
 16384 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 697378& \cellcolor[rgb]{0.78125,0.9990234375,0.75} 1.12603x& \cellcolor[rgb]{0.787109375,0.9990234375,0.75} 1.15191x& \cellcolor[rgb]{0.78125,0.9990234375,0.75} 1.12581x& \cellcolor[rgb]{0.787109375,0.9990234375,0.75} 1.15269x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 10.00521x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 10.73828x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 10.98249x\\
 \hline
-\end{NiceTabular}
+\end{NiceTabular}}
 \caption{\label{demo-table}Benchmark of \texttt{benches/sieven.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
-\end{center}
 \end{table}
 
 \subsubsection{\lstinline!benches/subset.ll!}
+\begin{table}[H]
+\makebox[\textwidth][c]{
 \begin{NiceTabular}{|c|cccccccc|}
 \hline
 n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
@@ -1001,9 +1000,13 @@ n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & g
 16 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08622x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14309x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08345x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14388x& \cellcolor[rgb]{0.9853515625,0.9990234375,0.75} 1.94770x& \cellcolor[rgb]{0.9990234375,0.978515625,0.75} 2.62809x& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99463x\\
 17 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08533x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14335x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08652x& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14605x& \cellcolor[rgb]{0.986328125,0.9990234375,0.75} 1.94922x& \cellcolor[rgb]{0.9990234375,0.978515625,0.75} 2.64844x& \cellcolor[rgb]{0.9990234375,0.966796875,0.75} 3.01363x\\
 \hline
-\end{NiceTabular}
+\end{NiceTabular}}
+\caption{\label{demo-table}Benchmark of \texttt{benches/sieven.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
+\end{table}
 
 \subsubsection{\lstinline!benches/sha256.ll!}
+\begin{table}[H]
+\makebox[\textwidth][c]{
 \begin{NiceTabular}{|c|cccccccc|}
 \hline
 n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
@@ -1012,11 +1015,13 @@ n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & g
 1000 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.9990234375,0.9189453125,0.75} 4.54197x& \cellcolor[rgb]{0.9990234375,0.91015625,0.75} 4.83710x& \cellcolor[rgb]{0.9990234375,0.9189453125,0.75} 4.54593x& \cellcolor[rgb]{0.9990234375,0.91015625,0.75} 4.83359x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 31.35583x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 31.26454x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 31.56475x\\
 10000 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.9990234375,0.9111328125,0.75} 4.80821x& \cellcolor[rgb]{0.9990234375,0.9013671875,0.75} 5.11478x& \cellcolor[rgb]{0.9990234375,0.9111328125,0.75} 4.80648x& \cellcolor[rgb]{0.9990234375,0.9013671875,0.75} 5.12019x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 33.50659x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 33.41428x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 33.72138x\\
 \hline
-\end{NiceTabular}
+\end{NiceTabular}}
+\caption{\label{tab:fannkuch}Benchmark of \texttt{benches/sha256.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
+\end{table}
 
 \subsubsection{\lstinline!benches/fannkuch-redux.ll!}
-\begin{table}[!ht]
-\begin{center}
+\begin{table}[H]
+\makebox[\textwidth][c]{
 \begin{NiceTabular}{|c|cccccccc|}
 \hline
 arg & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
@@ -1029,9 +1034,8 @@ arg & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 &
 9 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 115513112& \cellcolor[rgb]{0.8935546875,0.9990234375,0.75} 1.57771x& \cellcolor[rgb]{0.904296875,0.9990234375,0.75} 1.62155x& \cellcolor[rgb]{0.888671875,0.9990234375,0.75} 1.55882x& \cellcolor[rgb]{0.9990234375,0.98046875,0.75} 2.57223x& \cellcolor[rgb]{0.9990234375,0.82421875,0.75} 7.60550x& \cellcolor[rgb]{0.9990234375,0.8154296875,0.75} 7.87522x& \cellcolor[rgb]{0.9990234375,0.8212890625,0.75} 7.69289x\\
 10 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1352747472& \cellcolor[rgb]{0.8857421875,0.9990234375,0.75} 1.54700x& \cellcolor[rgb]{0.935546875,0.9990234375,0.75} 1.74875x& \cellcolor[rgb]{0.89453125,0.9990234375,0.75} 1.58381x& \cellcolor[rgb]{0.9169921875,0.9990234375,0.75} 1.67440x& \cellcolor[rgb]{0.9990234375,0.818359375,0.75} 7.77269x& \cellcolor[rgb]{0.9990234375,0.8193359375,0.75} 7.74449x& \cellcolor[rgb]{0.9990234375,0.8173828125,0.75} 7.82170x\\
 \hline
-\end{NiceTabular}
+\end{NiceTabular}}
 \caption{\label{tab:fannkuch}Benchmark of \texttt{benches/sieven.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
-\end{center}
 \end{table}
 
 
