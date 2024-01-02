@@ -287,8 +287,9 @@ This property eliminates redefinitions entirely, making it easier to reason abou
 It's important to note that SSA form itself doesn't inherently mandate immutability, despite only allowing for single assignment.
 Rather, it provides two approaches to mutable variables: the phi nodes and load/store operations. 
 
-As an extension of the earlier example, consider the implementation of multiplication in Figure \ref{fig:mulc}. Translating to LLVM IR with no optimization  can be seen in Figure \ref{fig:mulll0}, which achieves mutability by allocating a variable on the stack (lines 2-5), loading the value on use and storing on reassignment.
-This means the new value is loaded and assigned upon reentering a block, so any changes made at runtime by storing new values will take effect.
+Building on the earlier example, consider multiplication as  implemented in Figure \ref{fig:mulc}. Translated to LLVM IR with no optimization  can be seen in Figure \ref{fig:mulll0}, which achieves mutability by allocating a variable on the stack (lines 2-5), loading the value on use and storing on reassignment.
+This means new values are loaded and assigned upon reentering a block, without reassigning the value of the source variable, which points to whatever slot was available at the time of definition.
+%so any changes made at runtime by storing new values will take effect, without reassigning the source variable as it remains the address of whatever slot may be allocated on the stack.
 
 %Although, this property also However, it's important to note that SSA form itself doesn't inherently introduce mutability;
 \begin{figure}[!ht]
@@ -299,15 +300,14 @@ extern int add(int a, int b);
 
 int mul(int a, int b) {
   int product = 0;
-
   for (int i = 0; i < a; i++) {
     product = add(product, b);
   }
-
   return product;
 }
      \end{minted}
      \caption{Multiplication function implemented in C}\label{fig:mulc}
+     \vspace{2.1em}
      \begin{minted}[bgcolor=LightGray]{llvm}
 declare i32 @add(i32, i32)
 
@@ -365,7 +365,8 @@ define i32 @mul (i32 %0, i32 %1) {
      \caption{Stripped \texttt{clang -O0 -S -emit-llvm}}\label{fig:mulll0}
    \end{minipage}
 \end{figure}
-
+Another approach is that of Figure \ref{fig:mulll1}, which uses so-called 'phi nodes' instead.  These are a type of pseudo instruction that evaluate to a specified operand depending on which predecessor block was executed immediately before. This circumvents the need for the same level of interior mutability as is achieved by reading/writing to memory, without violating the properties of SSA. By copying a value from the end of a predecessor to the beginning of the current block.
+A Phi node represents a point in the program where the control flow merges, and it selects the appropriate version of a variable based on the path taken. This ensures that the data flow is well-defined and allows for easy analysis across different control flow paths.
 
 
 %Obviously, that 
