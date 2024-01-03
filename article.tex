@@ -380,12 +380,13 @@ A Phi node represents a point in the program where the control flow merges, and 
 
 
 The backend of a compiler takes some form of IR as input, usually a linear sequence of instructions for each separate function. This representation is close to the level of an actual processor by design, but it isn't immediately useful for the further analysis steps needed to generate optimized code for the target architecture. %%(FIXME: why not?)
-The control flow of a given program refers to the order in which instructions are executed. While the flow of most instructions is linear, in the sense that the next instruction executed is located immediately after, some transfer the flow of execution elsewhere or terminate it. %% FIXME: why is this important?
+The control flow of a given program refers to the order in which instructions are executed. While the flow of most instructions is linear, in the sense that the next instruction executed is located immediately after, some transfer the flow of execution elsewhere or outright terminate it. %% FIXME: why is this important?
 
 % mention basic block early on, they're a contiguous sequence of instructions that do not transfer control flow
 
 A continuous flow of instructions is referred to as a \textit{basic block}, defined as a sequence of instructions with no branches in or out except for the first instruction (referred to as a \textit{leader}, immediately following either the function entry or label within it) and the last (referred to as a \textit{terminator}, as it either terminates or transfers the flow of execution). %These are often referred to as terminators and can be thought of as an entirely different categoriy of instructions. % TODO: måske drop 'can be thought of'
 In order to represent the order in which instructions are executed, a \textit{control flow graph} (CFG) is introduced. It is a directed graph whose edges represent transfer of control. The type of node varies over the source material, with CFGs of the Appel text \cite{tiger} constructed over individual instructions  and the Aho text \cite{dragon} over basic blocks.
+% TODO: comment on precision
 Either way, leaders will have a set of predecessors and terminators a set of successors associated with them.
 
 Terminators have one or two successors in the case of branching or none at all in the case of function exit. % These can either be associated basic blocks or individual instructions that make it up.
@@ -419,13 +420,15 @@ and while each node also has predecessors associated, which consist of an  unbou
 %\subsection{Parameterized over basic blocks}
 
 
-Building a graph is relatively straight forward, with the input for every function declared parsed into a tuple type \mintinline{ocaml}{cfg}  of the form:
+Building a graph is relatively straight forward, with the input for every function declared parsed as a tuple type named \mintinline{ocaml}{cfg}  of the form:
 \begin{center}
 \begin{minted}{ocaml}
 type cfg = (lbl option * block) * (lbl * block) list
 \end{minted}
 \end{center}
-which consists of an optionally named entry block in the first part and a list of trailing blocks that are always named in the second. The reason for the first block to be optionally named is the fact that \textit{some} LLVM programs transfer control back to the point of entry, whereas every subsequent block needs to be named because branching can only target it by its name.
+Which consists of an optionally named entry block in the first part and a list of trailing blocks that are always named in the second. The reason for the first block to be optionally named is the fact that \textit{some} LLVM programs transfer control back to the point of entry, whereas every subsequent block needs to be named because branching can only target it by its name.
+
+From this, a CFG is constructed  using the \texttt{OCamlgraph} library \cite{ocamlgraph}, which provides several approaches with  various  structures, but the one used in this case is \texttt{Imperative.Digraph.Abstract} where the index is parameterized over \texttt{int} which corresponds to the index of the instruction starting at 0 for the first instruction to be executed. At first, a graph is constructed with the input flattened such that 
 
 %* description of blocks, how they connect etc.
 
@@ -611,9 +614,9 @@ Constructing an interference graph only depends on the \textit{live-out} set and
 
 
 Because of this, for any phi node of the form 
-\[
-  a = \Phi (b_1, ..., b_n)
-\]
+\begin{equation}
+  a = \Phi (b_1, ..., b_n) \label{phi}
+\end{equation}
 add edges to all \textit{live-out} variables not in \(B\):
 \[
   \forall b_j \in \mathit{out}[i] \setminus \{b_1, ..., b_n\}, \text{add\_edge}(a, b_j)
@@ -779,10 +782,55 @@ An example of this would be the division/remainder operation: since integer divi
 \end{center}
 
 
-\subsubsection{Implementing \mintinline{llvm}{call} operation}
+\subsubsection{Implementing \mintinline{llvm}{call} instructions}
 
 The \mintinline{llvm}{call} operation is by far the most complicated one. Mostly because of calling conventions,
 The \mintinline{gas}{%rax} register is zeroed before 
+
+\subsubsection{Implementing \mintinline{llvm}{phi} instructions}
+Another irregular instruction is the \mintinline{llvm}{phi} instruction representing the \(\Phi\)-functions. Their  intended purpose is to copy data from whichever predecessor node was executed.
+%, so intuitively, additional branching must be incurred to select the correct value to merge, but this isn't the case. Rather, 
+As opposed to the other instructions that are only concerned with transferring the current state to another, this operation needs to concern itself with what was executed immediately prior.
+Fortunately there is no need to further complicate the scenario with additional state for the past executed block, as simply moving from \(\mathit{assign}[b_i]\) to \(\mathit{assign}[a]\) immediately prior to branching into the block whose header contains a phi node of the form \eqref{phi} will suffice.
+
+Notice for instance Figure \ref{fig:square0ll} which has three phi nodes: two in  block 3 and one in block 9, i.e. \texttt{\%0} needs to be copied to \texttt{\%4} when control is transferred from block 1 and \texttt{\%7} when transferred from block 3. Likewise \texttt{\$0} must be copied to \texttt{\%5} when transferred from block 1 and \texttt{\%6} when transferred from block 3.
+
+\begin{figure}[H]
+   \begin{minipage}{0.48\textwidth}
+     \centering
+     \begin{minted}[bgcolor=LightGray]{llvm}
+define i32 @main (i32 %0) {
+1:
+ %2 = icmp sgt i32 %0, 0
+ br i1 %2, label %3, label %9
+3:
+ %4 = phi i32 [%0, %1], [%7, %3]
+ %5 = phi i32 [0, %1], [%6, %3]
+ %6 = add i32 %5, %0
+ %7 = sub i32 %4, 1
+ %8 = icmp ugt i32 %7, 0
+ br i1 %8, label %3, label %9
+9:
+ %10 = phi i32 [0, %1], [%6, %3]
+ ret i32 %10
+}
+     \end{minted}
+     \caption{\texttt{tests/square0.ll}}\label{fig:square0ll}
+   \end{minipage}\hfill
+   \begin{minipage}{0.48\textwidth}
+     \centering
+     \begin{minted}[bgcolor=LightGray]{llvm}
+define i32 @add (i32 %0, i32 %1) {
+ %3 = add i32 %1, %0
+ ret i32 %3
+}
+     \end{minted}
+     \caption{Stripped \texttt{clang -O1 -S -emit-llvm}}\label{fig:square0c}
+   \end{minipage}
+\end{figure}
+
+
+%and concerning with which node was executed immediately before, this can be achieved by approaching the problem differently.
 
 %* safest possible x86 translation
 %
