@@ -793,12 +793,10 @@ Another irregular instruction is the \mintinline{llvm}{phi} instruction represen
 As opposed to the other instructions that are only concerned with transferring the current state to another, this operation needs to concern itself with what was executed immediately prior.
 Fortunately there is no need to further complicate the scenario with additional state for the past executed block, as simply moving from \(\mathit{assign}[b_i]\) to \(\mathit{assign}[a]\) immediately prior to branching into the block whose header contains a phi node of the form \eqref{phi} will suffice.
 
-Notice for instance Figure \ref{fig:square0ll} which has three phi nodes: two in  block 3 and one in block 9, i.e. \texttt{\%0} needs to be copied to \texttt{\%4} when control is transferred from block 1 and \texttt{\%7} when transferred from block 3. Likewise \texttt{\$0} must be copied to \texttt{\%5} when transferred from block 1 and \texttt{\%6} when transferred from block 3.
-
 \begin{figure}[H]
    \begin{minipage}{0.48\textwidth}
      \centering
-     \begin{minted}[bgcolor=LightGray]{llvm}
+     \begin{minted}[linenos,bgcolor=LightGray]{llvm}
 define i32 @main (i32 %0) {
 1:
  %2 = icmp sgt i32 %0, 0
@@ -815,19 +813,39 @@ define i32 @main (i32 %0) {
  ret i32 %10
 }
      \end{minted}
-     \caption{\texttt{tests/square0.ll}}\label{fig:square0ll}
+     \caption{\texttt{cat tests/square0.ll}}\label{fig:square0ll}
    \end{minipage}\hfill
    \begin{minipage}{0.48\textwidth}
      \centering
-     \begin{minted}[bgcolor=LightGray]{llvm}
-define i32 @add (i32 %0, i32 %1) {
- %3 = add i32 %1, %0
- ret i32 %3
-}
+     \begin{minted}[linenos,bgcolor=LightGray]{gas}
+_main$3:
+  # ...
+  # br i1 %8, label %3, label %9
+  movq %rdx, %rax
+  cmpq $0, %rax
+  movq %rbx, %rax
+  movq %rax, %rdx
+  je _main$9
+  movq %rsi, %rax
+  movq %rax, %rsi
+  movq %rbx, %rax
+  movq %rax, %rdx
+  jmp _main$3
+_main$9:
+  # ...
      \end{minted}
-     \caption{Stripped \texttt{clang -O1 -S -emit-llvm}}\label{fig:square0c}
+     \caption{\texttt{dune exec build -{}- -t x86}}\label{fig:square0s}
    \end{minipage}
 \end{figure}
+
+Notice for instance Figure \ref{fig:square0ll} which has three phi nodes: two in  block 3 and one in block 9, i.e. \texttt{\%0} needs to be copied to \texttt{\%4} when control is transferred from block 1 and \texttt{\%7} when transferred from block 3. Likewise the immediate value \texttt{\$0} must be copied to \texttt{\%5} when transferred from block 1 and \texttt{\%6} when transferred from block 3.
+All of the relevant translation can be seen in the fragment on Figure \ref{fig:square0s}. After the comparison operation on lines 4-6 that check if the boolean condition of \texttt{\%2} is nonzero and setting \texttt{FLAGS} register accordingly, \texttt{\$0} is moved into
+\(\mathit{assign}[\texttt{\%1}]\) in preparation
+of transferring to \texttt{\_main\$9} if the zero flag indeed is set. If not, execution is continued in which case both \(\mathit{assign}[\texttt{\%6}]\) and \(\mathit{assign}[\texttt{\%7}]\) are moved into \(\mathit{assign}[\texttt{\%4}]\) and \(\mathit{assign}[\texttt{\%5}]\) respectively, in preperation for continuing execution at \texttt{\_main\$3}.
+
+As \texttt{mov} operations do not change the \texttt{FLAGS} register, having \texttt{mov} instructions between the branching instructions of \texttt{je} and \texttt{jmp} do not affect the branching. Likewise, because of the \(\mathit{use}[n]\) semantics of \(\Phi\)-functions, all \(b_i\) are in interference in one another, so may not be overwritten by the \texttt{mov}s inserted.
+
+% FIXME: check if above is sound
 
 
 %and concerning with which node was executed immediately before, this can be achieved by approaching the problem differently.
