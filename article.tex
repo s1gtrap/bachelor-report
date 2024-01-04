@@ -234,13 +234,13 @@ Likewise, a compiler backend will support any frontend provided that they emit c
 
 Because of this, compilation of high-level programming languages will often go no further than emitting IR, then leave the rest for a subsequent backend toolchain. This naturally leads to the LLVM toolchain, which is by far the most used compiler backend in practice. Most languages, if targeting native execution on a CPU, will have an LLVM implementation. This is true for C/C++ (Clang compiler \cite{clang}), D (LDC compiler \cite{dlang}), Swift (official Swift compiler \cite{swift}) and Rust (officilal \texttt{rustc} compiler \cite{rustc}). The use of LLVM allows for them to be compiled to completely unforeseen architectures, like web browsers with WebAssembly or even graphics cards with compute kernels \cite{backend}.
 
-Conversely, managed languages such as Java and C\# target their own respective VMs, so typically don't have much to gain from the LLVM toolchain. That said, some projects have attempted to implement LLVM in their translation of bytecode to native architectures,  such as LLILC which promised both \textit{just-in-time} (JIT) as well as \textit{ahead-of-time} (AOT) compilation \cite{dotnet}. Similarly, Kotlin (the spiritual successor to Java) that ordinarily targets the JVM has a native backend that compiles directly to machine code using LLVM, circumventing the need for a VM entirely \cite{kotlin}.
+Conversely, managed languages such as Java and C\# target their own respective VMs, so they typically don't have much to gain from the LLVM toolchain. That said, some projects have attempted to implement LLVM in their translation of bytecode to native architectures,  such as LLILC which promised both \textit{just-in-time} (JIT) as well as \textit{ahead-of-time} (AOT) compilation \cite{dotnet}. Similarly, Kotlin (the spiritual successor of Java) that ordinarily targets the JVM has a native backend that compiles directly to machine code using LLVM, circumventing the need for a VM entirely \cite{kotlin}.
 %Meanwhile interpreted languages like JavaScript eagerly attempt use LLVM for \textit{just-in-time} (JIT) compilation % FIXME: this is not true at all lol
 
 %The modularization of the frontend and backend stages also helps immensely.
 For example, the add function implemented in C as seen in Figure \ref{fig:addc} is compiled to the LLVM IR as seen in Figure \ref{fig:addll} after stripping optimization attributes with the \texttt{strip} utility. At this level of complexity they are largely equivalent, with the primary difference appearing to be syntactic. LLVM IR keeps the typed binary operations as well as the function construct with a return statement, although the variable names are discarded as IR is generally not for human interaction, except the function name, as this is used for linking with other object files. 
 
-\begin{figure}[!ht]
+\begin{figure}[H]
    \begin{minipage}{0.48\textwidth}
      \centering
      \begin{minted}[bgcolor=LightGray]{c}
@@ -276,7 +276,7 @@ add:                                    # @add
    \end{minipage}
    \end{center}
 \end{figure}
-When the IR is translated to x86 as seen in Figure \ref{fig:addx86}, the virtual variables \texttt{\%0}, \texttt{\%1} and \texttt{\%2} are assigned the registers \texttt{\%esi}, \texttt{\%edi} and \texttt{\%eax} respectively. This is presumably because of several optimizations, as \texttt{\%rdi} and \texttt{\%rsi} are used to pass the first and second parameters and the \texttt{\%rax} as the return value according to the System V AMD64 ABI \cite{sysv}, so by assigning the variables to those, several \texttt{mov}s are saved. Either way, the assignment is sound and the instruction selection is reasonably close to the  source code. Obviously there are other changes as well, as marking the target section with \texttt{.text} and the \texttt{.globl} annotation to export \texttt{add} in the symbol table which permits linking with other object files, but that isn't stricly related to register allocation.
+When the IR is translated to x86 as seen in Figure \ref{fig:addx86}, the virtual variables \texttt{\%0}, \texttt{\%1} and \texttt{\%2} are assigned the registers \texttt{\%esi}, \texttt{\%edi} and \texttt{\%eax} respectively. This is presumably because of several optimizations, as \texttt{\%rdi} and \texttt{\%rsi} are used to pass the first and second parameters and the \texttt{\%rax} as the return value according to the System V AMD64 ABI \cite{sysv}, so by assigning the variables to those, several \texttt{mov}s are saved. Either way, the assignment is sound and the instruction selection is reasonably close to the  source code. There are other changes as well, as marking the target section with \texttt{.text} and the \texttt{.globl} annotation to export \texttt{add} in the symbol table which permits linking with other object files, but that isn't stricly related to register allocation.
 
 
 \subsection{Static Single-Assignment form}
@@ -366,7 +366,7 @@ define i32 @mul (i32 %0, i32 %1) {
      \caption{Stripped \texttt{clang -O0 -S -emit-llvm}}\label{fig:mulll0}
    \end{minipage}
 \end{figure}
-Another approach is that of Figure \ref{fig:mulll1}, which uses so-called 'phi nodes' instead.  These are a type of pseudo instruction that evaluate to a specified operand depending on which predecessor block was executed immediately before. This circumvents the need for the same level of interior mutability as is achieved by reading/writing to memory, without violating the properties of SSA. By copying a value from the end of a predecessor to the beginning of the current block.
+Another approach is that of Figure \ref{fig:mulll1}, which uses so-called 'phi nodes' instead.  These are a type of instruction that evaluates to a specified operand depending on which predecessor block was executed immediately before. This circumvents the need for the same level of interior mutability as is achieved by reading/writing to memory, without violating the properties of SSA. By copying a value from the end of a predecessor to the beginning of the current block.
 A Phi node represents a point in the program where the control flow merges, and it selects the appropriate version of a variable based on the path taken. This ensures that the data flow is well-defined and allows for easy analysis across different control flow paths.
 
 
@@ -393,7 +393,7 @@ Terminators have one or two successors in the case of branching or none at all i
 Unconditional branching always transfers control to the block labelled, meaning only one successor follow, whereas conditional branching could transfer to either of the two, but because control flow analysis is not concerned with data, both are considered as possible successors. % TODO: rets 
 
 Successors of node \(n\) are denoted \( \mathit{succ}[n], \)
-and while each node also has predecessors associated, which consist of an  unbounded number of nodes from which control may be transferred, it isn't particularly useful in the following analysis.
+and while each node also has a set of predecessors associated, which consists of an  unbounded number of nodes from which control may be transferred, it isn't particularly useful in the following analysis.
 
 %Basic blocks represent a single node in a \textit{control flow graph} (CFG), which is a directed graph whose edges denote transfer of  control flow.
 %The unconditional branch terminator always transfers control flow to the block labelled, meaning only one successor will follow, whereas conditional branching could transfer to either of the two, but because control flow analysis is not concerned with data, it simply adds both as successors. % TODO: rets 
@@ -426,7 +426,7 @@ Building a graph is relatively straight forward, with the input for every functi
 type cfg = (lbl option * block) * (lbl * block) list
 \end{minted}
 \end{center}
-Which consists of an optionally named entry block in the first part and a list of trailing blocks that are always named in the second. The reason for the first block to be optionally named is the fact that \textit{some} LLVM programs transfer control back to the point of entry, whereas every subsequent block needs to be named because branching can only target it by its name.
+which consists of an optionally named entry block in the first part and a list of trailing blocks that are always named in the second. The reason for the first block to be optionally named is the fact that \textit{some} LLVM programs transfer control back to the point of entry, whereas every subsequent block needs to be named because branching can only target it by its name.
 
 From this, a CFG is constructed  using the \texttt{OCamlgraph} library \cite{ocamlgraph}, which provides several approaches with  various  structures, but the one used in this case is \texttt{Imperative.Digraph.Abstract} where the index is parameterized over \texttt{int} which corresponds to the index of the instruction starting at 0 for the first instruction to be executed. At first, a graph is constructed with the input flattened such that 
 
@@ -617,7 +617,7 @@ Because of this, for any phi node of the form
 \begin{equation}
   a = \Phi (b_1, ..., b_n) \label{phi}
 \end{equation}
-add edges to all \textit{live-out} variables not in \(B\):
+add edges to all \textit{live-out} variables not in \(\{b_1, ..., b_n\}\):
 \[
   \forall b_j \in \mathit{out}[i] \setminus \{b_1, ..., b_n\}, \text{add\_edge}(a, b_j)
 \]
@@ -732,7 +732,7 @@ The primary text is \textit{Linear Scan Register Allocation} (\cite{linear}), th
 The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as, for instance, neither of the languages implemented support exception handling, floating point operations and so on, and instead only strive to cover the basics of compilers.
 
 The instructions included are
-\lstinline!trunc! has only been added in order to help cover more generated LLVM.
+\lstinline!trunc! has only been added in order to help cover more generated LLVM. % FIXME
 %with only four distinct block terminators 
 %\begin{enumerate}
 %    \item Unconditional \lstinline!br! followed by the label to branch to
@@ -843,7 +843,7 @@ All of the relevant translation can be seen in the fragment on Figure \ref{fig:s
 \(\mathit{assign}[\texttt{\%1}]\) in preparation
 of transferring to \texttt{\_main\$9} if the zero flag indeed is set. If not, execution is continued in which case both \(\mathit{assign}[\texttt{\%6}]\) and \(\mathit{assign}[\texttt{\%7}]\) are moved into \(\mathit{assign}[\texttt{\%4}]\) and \(\mathit{assign}[\texttt{\%5}]\) respectively, in preperation for continuing execution at \texttt{\_main\$3}.
 
-As \texttt{mov} operations do not change the \texttt{FLAGS} register, having \texttt{mov} instructions between the branching instructions of \texttt{je} and \texttt{jmp} do not affect the branching. Likewise, because of the \(\mathit{use}[n]\) semantics of \(\Phi\)-functions, all \(b_i\) are in interference in one another, so may not be overwritten by the \texttt{mov}s inserted.
+As \texttt{mov} operations do not change the \texttt{FLAGS} register \cite{x86asm}, having \texttt{mov} instructions between the branching instructions of \texttt{je} and \texttt{jmp} do not affect the branching. Likewise, because of the \(\mathit{use}[n]\) semantics of \(\Phi\)-functions, all \(b_i\) are in interference in one another, so may not be overwritten by the \texttt{mov}s inserted.
 
 % FIXME: check if above is sound
 
@@ -858,6 +858,8 @@ As \texttt{mov} operations do not change the \texttt{FLAGS} register, having \te
 It is difficult to assert the correctness of a compiler. While writing simple unit tests is easy, guaranteeing the correctness of code generated for any given input is on a different order of magnitude in terms of complexity.
 
 Validating the correctness of each instruction translation is a complicated task given how low-level it is. One approach is attaching a debugger and examining the state before and after the translated sequence of x86 instructions is executed. The result of applying a binary operation,  for instance, should only affect the assigned register.
+
+% TODO: kommenter på stripper
 
 \subsubsection{Debugger Harness}
 A more elaborate way of testing correctness of translation is to assert that there are no effects except for those intended. One way of achieving this is to check if a group of x86 instructions representing a single LLVM-- operation change any values except those expected. An approach to this is to attach a debugger, insert a breakpoint before every LLVM-- instruction, and ensure that only the intended registers are altered.
