@@ -503,7 +503,7 @@ A sound albeit very naive approach is to consider every variable live at every p
 This forces every variable to be assigned a different register, which is a viable approach for small programs with fewer variables than the set of assignable registers.
 %where every variable is assigned a different register. % FIXME: find a place for: This generally isn't a very performant approach in terms of execution 
 Such a heuristic is greedy in the sense that it picks an assignment known to be safe for the least amount of preprocessing possible. However, this can be a very inefficient assignment at runtime. 
-When the number of variables is greater than the number of assignable registers, the variable is spilled. A number of \(n\)  variables greater than \(k\) working registers causes \(n-k\) variables to be spilled to memory, % TODO: skal der stå stack?
+When the number of variables is greater than the number of assignable registers, a variable must be spilled. A number of \(n\)  variables greater than \(k\) working registers causes \(n-k\) variables to be spilled, % TODO: skal der stå stack?
 which can greatly reduce performance, but  allows for translation in linear time. %FIXME: is this even true?
 
 \subsection{Dataflow Analysis}
@@ -517,7 +517,7 @@ The transfer constraint is based on a \textit{transfer function} that describes 
 \begin{align}\label{flowin}
   \mathit{in}\left[n\right] &= \mathit{use}\left[n\right] \cup (\mathit{out}\left[n\right] - \mathit{def}\left[n\right])
 \end{align}
-with the \(\mathit{use}[n]\) set being defined as any variables that may be used and the \(\mathit{def}[n]\) as the set of variables defined in node \(n\). Because the chosen IR is in SSA form the \(\mathit{def}[n]\) either consists of one variable or equal to \(\emptyset\). The  \(\mathit{use}[n]\) set is effectively unbounded as some instructions take any \(m\) variables as parameters.
+with the \(\mathit{use}[n]\) set being defined as any variables that may be used and the \(\mathit{def}[n]\) as the set of variables defined in node \(n\). The \(\mathit{def}[n]\) either consists of one variable or equal to \(\emptyset\). The  \(\mathit{use}[n]\) set is effectively unbounded as some instructions take any \(m\) variables as parameters.
 
 Control-flow constraints on the other hand propagate the use of variables to previously executed instructions, expecting these to be defined somewhere further up the CFG. This is done by propagating the union of the \textit{live-in} set associated with all immediate successor nodes. This is also referred to as the \textit{meet operator}, whose operator depends on the type of dataflow analysis as well, but for liveness analysis a union is performed on the \textit{live-in} sets of  any successive  nodes:
 \begin{align}\label{flowout}
@@ -591,7 +591,31 @@ module SS = Set.Make (struct
 end)
 type set = SS.t
 \end{minted}
+
+\noindent The \texttt{flowin} function corresponds to the \textit{live-in} equation \eqref{flowin} and is implemented as follows:
+\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let flowin (i, insn) =
+  let newin = S.SS.union (use insn) (S.SS.diff out.(i) (def insn)) in
+  let changed = not (S.SS.equal newin in_.(i)) in
+  if changed then in_.(i) <- newin;
+  changed
+\end{minted}
+And the \texttt{flowout} function which corresponds to the \textit{live-out} equation \eqref{flowout} implemented as follows:
+\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let flowout (i, _) =
+  let newout =
+    let succ = Cfg.G.succ g ids.(i) in
+    List.fold_left
+      (fun s v -> S.SS.union s in_.(Cfg.G.V.label v))
+      S.SS.empty succ
+  in
+  let changed = not (S.SS.equal newout out.(i)) in
+  if changed then out.(i) <- newout;
+  changed
+\end{minted}
+
 With the actual dataflow analysis performed recursively as follows:
+\begin{figure}[H]
 \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
 let dataflow (insns : Cfg.insn list) (ids : Cfg.G.V.t array) (g : Cfg.G.t) =
   let insns = List.mapi (fun i v -> (i, v)) insns |> List.rev in
@@ -605,28 +629,58 @@ let dataflow (insns : Cfg.insn list) (ids : Cfg.G.V.t array) (g : Cfg.G.t) =
   in
   dataflow ()
 \end{minted}
-The \texttt{flowin} function correponds to the \textit{live-in} equation \eqref{flowin} and is implemented as follows:
-\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
-let flowin (i, insn) =
-  let newin = S.SS.union (use insn) (S.SS.diff out.(i) (def insn)) in
-  let changed = not (S.SS.equal newin in_.(i)) in
-  if changed then in_.(i) <- newin;
-  changed
-\end{minted}
-And the \texttt{flowout} function which correponds to the \textit{live-out} equation \eqref{flowout} implemented as follows:
-\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
-let flowout (i, _) =
-  let newout =
-    let succ = Cfg.G.succ g ids.(i) in
-    List.fold_left
-      (fun s v -> S.SS.union s in_.(Cfg.G.V.label v))
-      S.SS.empty succ
-  in
-  let changed = not (S.SS.equal newout out.(i)) in
-  if changed then out.(i) <- newout;
-  changed
-\end{minted}
-To 
+\caption{Overall implementation of \texttt{dataflow}\label{fig:dataflow}}
+\end{figure}
+\noindent One thing that is particularly noteworthy is reversing of the flattened list of instructions on line 2 of Figure \ref{fig:dataflow}. After enumerating each entry so that the corresponding vertex is an array lookup away, it is reversed.
+The motivation for this is the fact that the \(\mathit{out}[n]\) of node \(n\) depends on \(\mathit{in}[s]\) for all successors \(s\). Since most nodes have one successor immediately after, populating this before hands is significantly more efficient.
+
+%\begin{NiceTabular}{|W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|}
+
+
+\begin{table}[H]
+\makebox[\textwidth][c]{
+\begin{NiceTabular}{|c|c c|c c|c c|c c|c c|c c|c c|}
+  \hline
+  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out\\
+  \hline
+  0  & 0  & 3 & 0  & 3 & 0  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8\\
+  1  & 3  &  & 3  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8\\
+  2  &   &  &   &  &   &  &   &  &   &  &   &  &   & \\
+  3  &   &  &   &  &   &  &   &  &   &  &   &  &   & \\
+  4  &   &  &   & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8\\
+  5  & 0,8  & 6 & 0,8  & 6 & 0,8  & 6 & 0,8  & 6 & 0,8  & 6 & 0,8  & 0,6 & 0,8  & 0,6\\
+  6  & 6  & 7 & 6  & 6 & 6  & 6 & 6  & 6 & 6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6\\
+  7  & 6  & 8 & 6  &  & 6  &  & 6  & 0,8 & 0,6  & 0,8 & 0,6  & 0,8 & 0,6  & 0,8\\
+  8  &   &  &   &  &   & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8\\
+  \hline
+\end{NiceTabular}
+}
+\caption{Output of \texttt{dune exec build -{}- -t lva -v tests/count1.ll}}
+\label{tab:countll-rev-steps}
+\end{table}
+
+
+\begin{table}[H]
+\makebox[\textwidth][c]{
+\begin{NiceTabular}{|c|c c|c c|c c|c c|c c|c c|c c|c c|c c|}
+  \hline
+  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out\\
+  \hline
+  0  & 0  & 3 & 0  &  & 0  & 3 & 0  & 3 & 0  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8\\
+  1  & 3  &  & 3  &  & 3  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8\\
+  2  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   & \\
+  3  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   & \\
+  4  &   &  &   &  &   & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8\\
+  5  & 0,8  & 6 & 0,8  &  & 0,8  & 6 & 0,8  & 6 & 0,8  & 6 & 0,8  & 6 & 0,8  & 6 & 0,8  & 0,6 & 0,8  & 0,6\\
+  6  & 6  & 7 & 6  &  & 6  & 6 & 6  & 6 & 6  & 6 & 6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6\\
+  7  & 6  & 8 & 6  &  & 6  &  & 6  & 0,8 & 0,6  & 0,8 & 0,6  & 0,8 & 0,6  & 0,8 & 0,6  & 0,8 & 0,6  & 0,8\\
+  8  &   &  &   & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8\\
+  \hline
+\end{NiceTabular}
+}
+\caption{Output of \texttt{dune exec build -{}- -t lva -v -r tests/count1.ll}}
+\label{tab:countll-steps}
+\end{table}
 
 
 \subsection{Interference Graph}
