@@ -132,9 +132,11 @@ cbox/.style={draw,
 }
 \tikzset{invisible/.style={minimum width=0mm,inner sep=0mm,outer sep=0mm}}
 
-\title{Implementation and comparison of register allocation to translate \lstinline!LLVM--! to x86}
+\font\myfont=cmr12 at 24pt
+\title{\myfont Implementation and evaluation of register allocation used to translate \texttt{LLVM-{}-} to x86-64}
 \author{William Welle Tange, 201809080}
 
+\pagenumbering{roman}
 
 \begin{document}
 
@@ -144,8 +146,14 @@ cbox/.style={draw,
 \end{center}
 \newpage
 
+
+\section*{Abstract}
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Tellus at urna condimentum mattis. Enim facilisis gravida neque convallis. Enim facilisis gravida neque convallis a cras semper auctor. Vitae proin sagittis nisl rhoncus mattis rhoncus urna neque. Justo nec ultrices dui sapien eget mi proin. Id aliquet risus feugiat in ante. A cras semper auctor neque vitae tempus quam pellentesque nec. Nulla porttitor massa id neque aliquam vestibulum morbi. Facilisi cras fermentum odio eu. Odio pellentesque diam volutpat commodo sed egestas egestas fringilla. Amet consectetur adipiscing elit duis tristique sollicitudin nibh sit amet. Adipiscing at in tellus integer feugiat. A pellentesque sit amet porttitor. Sed elementum tempus egestas sed sed risus pretium quam. Quam viverra orci sagittis eu volutpat odio facilisis mauris sit. Arcu dictum varius duis at. Sociis natoque penatibus et magnis dis parturient montes. Varius sit amet mattis vulputate enim nulla aliquet. Ac ut consequat semper viverra. Scelerisque eleifend donec pretium vulputate sapien nec. Orci ac auctor augue mauris augue. Pulvinar mattis nunc sed blandit. Semper auctor neque vitae tempus quam pellentesque nec nam. Risus pretium quam vulputate dignissim. Dui faucibus in ornare quam viverra orci sagittis eu volutpat. Ac tortor vitae purus faucibus. Eu mi bibendum neque egestas congue quisque egestas diam in. Curabitur vitae nunc sed velit dignissim sodales ut eu sem. Arcu odio ut sem nulla.
+\newpage
+
 \tableofcontents
 \newpage
+
 
 %% TODO: tjek hvad LLVM gør %%
 
@@ -154,6 +162,8 @@ cbox/.style={draw,
 %* skab så mange underpunkter som muligt
     %* jo mindre man skal overskue af gangen jo lettere er det at komme i gang med at skrive
     
+\setcounter{page}{1}
+\pagenumbering{arabic}
 
 \section{Introduction}
 
@@ -370,7 +380,7 @@ define i32 @mul (i32 %0, i32 %1) {
      \caption{Stripped \texttt{clang -O0 -S -emit-llvm}}\label{fig:mulll0}
    \end{minipage}
 \end{figure}
-Another approach is that of Figure \ref{fig:mulll1}, which uses so-called 'phi nodes' instead.  These are a type of instruction that evaluates to a specified operand depending on which predecessor block was executed immediately before. This circumvents the need for the same level of interior mutability as is achieved by reading/writing to memory, without violating the properties of SSA. By copying a value from the end of a predecessor to the beginning of the current block.
+Another approach is that of Figure \ref{fig:mulll1}, which uses so-called 'phi nodes' instead.  These are a type of instruction that evaluates to a specified operand depending on which predecessor block was executed immediately prior. This circumvents the need for the same level of interior mutability as is achieved by reading/writing to memory, without violating the properties of SSA. By copying a value from the end of a predecessor to the beginning of the current block.
 A Phi node represents a point in the program where the control flow merges, and it selects the appropriate version of a variable based on the path taken. This ensures that the data flow is well-defined and allows for easy analysis across different control flow paths.
 
 
@@ -428,9 +438,9 @@ Building a graph is relatively straight forward, with the input for every functi
 \begin{minted}{ocaml}
 type cfg = (lbl option * block) * (lbl * block) list
 \end{minted}
-which consists of an optionally named entry block in the first part and a list of trailing blocks that are always named in the second. The reason for the first block to be optionally named is the fact that \textit{some} LLVM programs transfer control back to the point of entry, whereas every subsequent block needs to be named because branching can only target it by its name.
+which consists of an optionally named entry block in the first part and a list of trailing blocks that are always named in the second. The reason for the first block to be optionally named is the fact that \textit{some} LLVM programs transfer control back to the point of entry, whereas every subsequent block needs to be named because branching can only target it by referring to its name.
 
-From this, a CFG is constructed  using the \texttt{OCamlgraph} library \cite{ocamlgraph}, which provides several approaches with  various  structures, but the one used in this case is \texttt{Imperative.Digraph.Abstract} where the index is parameterized over \texttt{int} which corresponds to the index of the instruction starting at 0 for the first instruction to be executed. At first, a graph is constructed with the input flattened such that labels, instructions and terminators are represented as a contiguous sequence as opposed to the basic blocks that is parsed from the input.
+From this, a CFG is constructed  using the \texttt{OCamlgraph} library \cite{ocamlgraph}, which provides several approaches with  various  structures, but the one used in this case is \texttt{Imperative.Digraph.Abstract} where the index is parameterized over \texttt{int} which corresponds to the index of the instruction starting at 0 for the first instruction to be executed. At first, a graph is constructed with the input flattened such that labels, instructions and terminators are represented as a continuous sequence as opposed to the basic blocks that is parsed from the input.
 
 \begin{minted}[bgcolor=LightGray]{ocaml}
 let flatten ((head, tail) : Ll.cfg) : insn list =
@@ -440,6 +450,8 @@ let flatten ((head, tail) : Ll.cfg) : insn list =
   let named (n, b) = Label n :: block b in
   named_opt head @ (List.map named tail |> List.flatten)
 \end{minted}
+
+This is done to more easily look up which graph vertex corresponds to the \(n\)th instruction/terminator.
 
 
 %* description of blocks, how they connect etc.
