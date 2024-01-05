@@ -494,7 +494,7 @@ which can greatly reduce performance, but  allows for translation in linear time
 
 % FIXME: beskriv use, def osv. sets tidligere!
 
-Another approach, which is a more precise approximation, is a specific variant of the dataflow analysis as described in \textit{Modern Compiler Implementation in ML} (\cite{tiger}) and \textit{Compilers: Principles, Techniques, and Tools} (\cite{dragon}). In general, dataflow analysis is the process of finding the possible paths in which data may propagate through various branches of execution.  While several applications of this exist (like constant propagation, reaching defnitions, available expressions etc.), one that is immediately beneficial in the case of liveness analysis is one that traverses a CFG in the reverse order of execution (i.e.  \textit{backwards} flow), and extracts any variable that \textit{may} be used in execution (also referred to as \textit{backwards may} analysis). % FIXME: forklar hvorfor List.rev ikke udgør backwards flow
+Another approach, which is a more precise approximation, is a specific variant of the dataflow analysis as described in \textit{Modern Compiler Implementation in ML} \cite{tiger} and \textit{Compilers: Principles, Techniques, and Tools} \cite{dragon}. In general, dataflow analysis is the process of finding the possible paths in which data may propagate through various branches of execution.  While several applications of this exist (like constant propagation, reaching defnitions, available expressions etc.), one that is immediately beneficial in the case of liveness analysis is one that traverses a CFG in the reverse order of execution (i.e.  \textit{backwards} flow), and extracts any variable that \textit{may} be used in execution (also referred to as \textit{backwards may} analysis). % FIXME: forklar hvorfor List.rev ikke udgør backwards flow
 
 This algorithm calculates which program points each variable may be accessed from with some conservative constraints known to maintain correctness. Specifically, these are the transfer and control-flow constraints. %, the former of which must satisfy a transfer function a
 The transfer constraint is based on a \textit{transfer function} that describes how liveness is affected across instructions. For each instruction, there is a transfer function that describes how liveness changes from one point to the one immediately after. For example, as an arithmetic operation needs to be assigned a new temporary variable, the liveness of a new variable is propagated to all  instructions  executed subsequently. This is done by applying the transfer function to the current \textit{live-out} set to stop further propagation of variables defined by the currently visited instruction. % TODO: In fact, because the IR is in SSA form, the only time 
@@ -633,7 +633,7 @@ For any other instruction that defines a variable \(a\)
 \[
   \forall b_j \in \{b_1, ..., b_n\}, \text{add\_edge}(a, b_j).
 \]
-Although the Appel text (\cite{tiger}) describes interference of variables with concrete registers as well as overlapping variables, this isn't considered in this implementation.
+Although the Appel text \cite{tiger} describes interference of variables with concrete registers as well as overlapping variables, this isn't considered in this implementation.
 
 
 
@@ -678,7 +678,7 @@ Since all edges are preserved, the resulting node \(ab\) may be of a much higher
 Another approach that does not depend on liveness analysis i the linear scan algorithm.
 It is a simple and efficient approach that performs a linear pass over IR to produce a register assignment significantly faster than all of the steps involved with graph coloring.
 
-The primary text is \textit{Linear Scan Register Allocation} (\cite{linear}), the execution of which also relies on prior liveness analysis.
+The primary text is \textit{Linear Scan Register Allocation} \cite{linear}, the execution of which also relies on prior liveness analysis.
 
 
 % TODO: find ud af hvad binpacking er
