@@ -631,27 +631,69 @@ let dataflow (insns : Cfg.insn list) (ids : Cfg.G.V.t array) (g : Cfg.G.t) =
 \end{minted}
 \caption{Overall implementation of \texttt{dataflow}\label{fig:dataflow}}
 \end{figure}
-\noindent One thing that is particularly noteworthy is reversing of the flattened list of instructions on line 2 of Figure \ref{fig:dataflow}. After enumerating each entry so that the corresponding vertex is an array lookup away, it is reversed.
+\noindent One particularly noteworthy thing is reversing of the flattened list of instructions on line 2 of Figure \ref{fig:dataflow}. After enumerating each entry so that the corresponding vertex can be looked up in the \texttt{ids} array, it is reversed.
 The motivation for this is the fact that the \(\mathit{out}[n]\) of node \(n\) depends on \(\mathit{in}[s]\) for all successors \(s\). Since most nodes have one successor immediately after, populating this before hands is significantly more efficient.
+
+Consider a simple program like Figure \ref{fig:countc} that only prints integers incrementally up until \texttt{argc}, in LLVM-{}-  that would consist of one loop with one phi node as seen in Figure \ref{fig:count1ll}. The number of iterations is nearly halfed when reverseing the list of instructions prior to dataflow as can be seen on \ref{tab:countll-rev-steps} when compared to \ref{tab:countll-steps}.
+
+\begin{figure}[H]
+  \begin{minipage}[b]{0.48\textwidth}
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{c}
+#include <stdio.h>
+
+int main(int argc, char **argv) {
+
+  for (int i = 1; i <= argc; i++) {
+    printf("%d!\n", i);
+  }
+
+  return 0;
+}
+     \end{minted}
+     \caption{\texttt{cat tests/count.ll}}\label{fig:countc}
+   \end{minipage}\hfill
+   \begin{minipage}[b]{0.48\textwidth}
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{llvm}
+define i32 @main (i32 %0, i8* %1) {
+ %3 = icmp slt i32 %0, 1
+ br i1 %3, label %4, label %5
+4:
+ ret i32 0
+5:
+ %6 = phi i32 [%8, %5], [1, %2]
+ %7 = call i32 (i8*, ...) @printf (i8* @.str, i32 %6)
+ %8 = add i32 %6, 1
+ %9 = icmp eq i32 %6, %0
+ br i1 %9, label %4, label %5
+}
+     \end{minted}
+     \caption{Stripped \texttt{clang -O1 -S -emit-llvm}}\label{fig:count1ll}
+   \end{minipage}
+\end{figure}
+
+
 
 %\begin{NiceTabular}{|W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|}
 
 
 \begin{table}[H]
 \makebox[\textwidth][c]{
-\begin{NiceTabular}{|c|c c|c c|c c|c c|c c|c c|c c|}
+\begin{NiceTabular}{|c|c c|c c|c c|c c|c c|c c|c c|c c|}
   \hline
-  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out\\
+  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out & in & out\\
   \hline
-  0  & 0  & 3 & 0  & 3 & 0  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8\\
-  1  & 3  &  & 3  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8\\
-  2  &   &  &   &  &   &  &   &  &   &  &   &  &   & \\
-  3  &   &  &   &  &   &  &   &  &   &  &   &  &   & \\
-  4  &   &  &   & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8\\
-  5  & 0,8  & 6 & 0,8  & 6 & 0,8  & 6 & 0,8  & 6 & 0,8  & 6 & 0,8  & 0,6 & 0,8  & 0,6\\
-  6  & 6  & 7 & 6  & 6 & 6  & 6 & 6  & 6 & 6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6\\
-  7  & 6  & 8 & 6  &  & 6  &  & 6  & 0,8 & 0,6  & 0,8 & 0,6  & 0,8 & 0,6  & 0,8\\
-  8  &   &  &   &  &   & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8\\
+  0  & 0  & 3 & 0  & 3 & 0  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8\\
+  1  & 3  &  & 3  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8\\
+  2  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   & \\
+  3  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   & \\
+  4  &   &  &   & 8 & 8  & 8 & 8  & 8 & 8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8\\
+  5  & 8  & 6 & 8  & 6 & 8  & 6 & 8  & 0,6 & 0,8  & 0,6 & 0,8  & 0,6 & 0,8  & 0,6 & 0,8  & 0,6\\
+  6  & 6  & 7 & 6  & 6 & 6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6\\
+  7  & 6  & 8 & 6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6,8 & 0,6  & 0,6,8 & 0,6  & 0,6,8 & 0,6  & 0,6,8\\
+  8  & 0,6  & 9 & 0,6  & 9 & 0,6  & 9 & 0,6  & 8,9 & 0,6,8  & 8,9 & 0,6,8  & 8,9 & 0,6,8  & 0,8,9 & 0,6,8  & 0,8,9\\
+  9  & 9  &  & 9  &  & 9  & 8 & 8,9  & 8 & 8,9  & 8 & 8,9  & 0,8 & 0,8,9  & 0,8 & 0,8,9  & 0,8\\
   \hline
 \end{NiceTabular}
 }
@@ -659,22 +701,23 @@ The motivation for this is the fact that the \(\mathit{out}[n]\) of node \(n\) d
 \label{tab:countll-rev-steps}
 \end{table}
 
-
 \begin{table}[H]
 \makebox[\textwidth][c]{
-\begin{NiceTabular}{|c|c c|c c|c c|c c|c c|c c|c c|c c|c c|}
+\setlength{\tabcolsep}{1pt}
+\begin{NiceTabular}{|c|c c|c c|c c|c c|c c|c c|c c|c c|c c|c c|c c|c c|}
   \hline
-  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out\\
+  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out\\
   \hline
-  0  & 0  & 3 & 0  &  & 0  & 3 & 0  & 3 & 0  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8\\
-  1  & 3  &  & 3  &  & 3  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8\\
-  2  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   & \\
-  3  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   & \\
-  4  &   &  &   &  &   & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8\\
-  5  & 0,8  & 6 & 0,8  &  & 0,8  & 6 & 0,8  & 6 & 0,8  & 6 & 0,8  & 6 & 0,8  & 6 & 0,8  & 0,6 & 0,8  & 0,6\\
-  6  & 6  & 7 & 6  &  & 6  & 6 & 6  & 6 & 6  & 6 & 6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6\\
-  7  & 6  & 8 & 6  &  & 6  &  & 6  & 0,8 & 0,6  & 0,8 & 0,6  & 0,8 & 0,6  & 0,8 & 0,6  & 0,8 & 0,6  & 0,8\\
-  8  &   &  &   & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8\\
+  0  & 0  & 3 & 0  &  & 0  & 3 & 0  & 3 & 0  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8\\
+  1  & 3  &  & 3  &  & 3  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8\\
+  2  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   & \\
+  3  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   &  &   & \\
+  4  &   &  &   &  &   & 8 & 8  & 8 & 8  & 8 & 8  & 8 & 8  & 8 & 8  & 8 & 8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8 & 0,8  & 0,8\\
+  5  & 8  & 6 & 8  &  & 8  & 6 & 8  & 6 & 8  & 6 & 8  & 6 & 8  & 0,6 & 0,8  & 0,6 & 0,8  & 0,6 & 0,8  & 0,6 & 0,8  & 0,6 & 0,8  & 0,6\\
+  6  & 6  & 7 & 6  &  & 6  & 6 & 6  & 6 & 6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6\\
+  7  & 6  & 8 & 6  &  & 6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6 & 0,6  & 0,6,8 & 0,6  & 0,6,8 & 0,6  & 0,6,8 & 0,6  & 0,6,8 & 0,6  & 0,6,8 & 0,6  & 0,6,8 & 0,6  & 0,6,8\\
+  8  & 0,6  & 9 & 0,6  &  & 0,6  & 9 & 0,6  & 8,9 & 0,6,8  & 8,9 & 0,6,8  & 8,9 & 0,6,8  & 8,9 & 0,6,8  & 8,9 & 0,6,8  & 8,9 & 0,6,8  & 0,8,9 & 0,6,8  & 0,8,9 & 0,6,8  & 0,8,9\\
+  9  & 9  &  & 9  & 8 & 8,9  & 8 & 8,9  & 8 & 8,9  & 8 & 8,9  & 8 & 8,9  & 8 & 8,9  & 0,8 & 0,8,9  & 0,8 & 0,8,9  & 0,8 & 0,8,9  & 0,8 & 0,8,9  & 0,8\\
   \hline
 \end{NiceTabular}
 }
@@ -682,10 +725,21 @@ The motivation for this is the fact that the \(\mathit{out}[n]\) of node \(n\) d
 \label{tab:countll-steps}
 \end{table}
 
+This is unnoticeable for snippets of marginal size like most examples included, but when applied to functions with a significant amount of def-use paths, it can be quite consequential. For \texttt{tests/sha256.ll} for instance, the running times are effectively doubled on x86-64:
+
+\begin{minted}{bash}
+$ time dune exec build -- tests/sha256.ll  -t lva -r
+[..]
+dune exec build [..] -t lva -r  33,69s user 0,04s system 99% cpu 33,765 total
+$ time dune exec build -- tests/sha256.ll  -t lva
+[..]
+dune exec build [..] -t lva  17,26s user 0,05s system 99% cpu 17,335 total
+\end{minted}
+
 
 \subsection{Interference Graph}
 
-The purpose for conducting dataflow analysis as above is finding variables that may be assigned the same register. This is done by building an interference graph, which is an undirected graph, whose nodes represent variables and edges that signify interference between them, i.e. variables \(a\) and \(b\) live at overlapping program points is represented with an edge \((a,b)\).
+The purpose for conducting dataflow analysis as above is finding variables that may be assigned the same register. This is done by building an interference graph, which is an undirected graph, whose nodes represent variables and edges that signify interference between them, i.e. variables \(a\) and \(b\) live at intersecting program points is represented with an edge \((a,b)\).
 
 
 Constructing an interference graph only depends on the \textit{live-out} set and type of instruction. If the instruction defines a variable, said variable is in interference with all variables in the \textit{live-out} set. There is one exception however: according to the Appel text, move instructions (i.e. phi nodes in the case of SSA form) are given special consideration. The purpose of phi nodes is to copy/move a certain value from a certain predecessor, so they are not necessarily in conflict for being live at the same time. Rather it would often benefit if they were assigned the same register to spare unnecessary moves. % TODO: uddyb hvorfor de ikke er i interference?
