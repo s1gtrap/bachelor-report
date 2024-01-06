@@ -133,7 +133,7 @@ cbox/.style={draw,
 \tikzset{invisible/.style={minimum width=0mm,inner sep=0mm,outer sep=0mm}}
 
 \font\myfont=cmr12 at 24pt
-\title{\myfont Implementation and evaluation of register allocation used to translate \texttt{LLVM-{}-} to x86-64}
+\title{\myfont Implementation and evaluation of register allocation used to translate LLVM-{}- to x86-64}
 \author{William Welle Tange, 201809080}
 
 \pagenumbering{roman}
@@ -451,7 +451,7 @@ let flatten ((head, tail) : Ll.cfg) : insn list =
   named_opt head @ (List.map named tail |> List.flatten)
 \end{minted}
 
-This is done to more easily look up which graph vertex corresponds to the \(n\)th instruction/terminator.
+This is done to simplify lookup of which graph vertex corresponds to the \(n\)th instruction/terminator.
 
 
 %* description of blocks, how they connect etc.
@@ -757,7 +757,7 @@ For any other instruction that defines a variable \(a\)
 \[
   \forall b_j \in \{b_1, ..., b_n\}, \text{add\_edge}(a, b_j).
 \]
-Although the Appel text \cite{tiger} describes interference of variables with concrete registers as well as overlapping variables, this isn't considered in this implementation.
+Although the Appel text \cite{tiger} describes interference of variables with concrete registers as well as overlapping variables, this isn't considered in this implementation. % FIXME: why??
 
 
 
@@ -779,15 +779,25 @@ Although the Appel text \cite{tiger} describes interference of variables with co
 %   * george
 %   * welsh-powell?
 \section{Graph Coloring}
-Once an interference graph is constructed, the actual assignments can be found using graph coloring. Although this has long been known to be NP-complete, the heuristic as introduced in both the Appel and Aho et al. texts is a linear time approximation to this problem. It is based on an iterative approach wherein nodes known to be colorable are removed until either an empty graph remains, in which case the original graph \(G\) is \(k\)-colorable  or nodes with more than \(k\) neighbours remain. In this case a node is chosen to be spilled to the stack and removed. This is then repeated.
+Once an interference graph is constructed, the actual assignments can be found using graph coloring.
+Graph coloring is a problem in graph theory where the goal is to assign colors to the vertices of a graph in such a way that no adjacent vertices are assigned the same color.
+A graph that can be colored using \(k\) different colors is referred to as \(k\)-colorable and the minimum number of colors needed to be assigned is also called its' chromatic number.
+Although this problem is known to be NP-complete  \cites[229]{tiger}[510]{dragon}, the heuristic as introduced in
+both the Appel \cite[229]{tiger}, and Aho et al. \cites[557]{dragon} texts,
+is a linear time approximation to this problem is described below.
 
-Let \(k\) be the number of working registers available on the target architecture. After building the interference graph \(G\), a node \(n\) with fewer than \(k\) neighbors is chosen. As \(n\) has at most \(k-1\) neighbors, it can be removed safely, effectively simplifying \(G\). It is pushed to a stack to preserve the order in which they are removed so that \(G\) can be rebuilt and the corresponding registers can be assigned correctly once a \(k\)-colorable assignment is found.
+\subsection{Coloring by simplification}
+
+The \textit{simplification} algorithm, also known as Chaitin's algorithm \cite{chaitin}, 
+ is an iterative approach wherein nodes known to be colorable are removed and pushed to a stack until either an empty graph remains, in which case the original graph is \(k\)-colorable,  or nodes with more than \(k\) neighbours remain.
+In this case a node is chosen to be spilled after which the process is started over. This is repeated until every node has been removed successfully, after which the vertices are assigned by popping them from the stack. Each of these are known to be \(k\)-colorable because of the earlier criteria of having less than \(k\) neighbors.
+
+%Let \(k\) be the number of working registers available on the target architecture. After building the interference graph \(G\), a node \(n\) with fewer than \(k\) neighbors is chosen. As \(n\) has at most \(k-1\) neighbors, it can be removed safely, effectively simplifying \(G\). It is pushed to a stack to preserve the order in which they are removed so that \(G\) can be rebuilt and the corresponding registers can be assigned correctly once a \(k\)-colorable assignment is found.
 
 %  (i.e. \(\mathit{deg}(n) < k\))
 
 %It must hold that \(G-\{n\}\) is \(k\)-colorable if \(G\) is \(k\)-colorable 
 
-\subsection{Coloring by simplification}
 
 %% TODO
 %* optimistic coloring
