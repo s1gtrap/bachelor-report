@@ -221,7 +221,7 @@ Because of this, a crucial part of the backend stage for an optimizing compiler 
 The process of assigning each variable to a GPR is referred to as \textit{register allocation}, and can be approached in several different ways. This paper will seek to implement graph coloring and linear scan and evaluate them in terms of runtime performance after compilation. %% TODO: compare with time-complexity/compile-time duration?
 The primary sources will be \textit{Modern Compiler Implementation in ML} \parencite{tiger} and \textit{Compilers: Principles, techniques, and tools} \parencite{dragon}, in addition to publications concerning the linear scan approach.
 
-The implementation is written in OCaml for the most part, although there is some marginal use of Python to interact with the LLDB debugger.
+The implementation is written in OCaml for the most part, although there is some marginal use of Python to interact with the LLVM toolchain's debugger 'LLDB'.
 
 
 %* overfladisk intro til hvad helvede register allokering er og hvorfor
@@ -380,7 +380,7 @@ define i32 @mul (i32 %0, i32 %1) {
      \caption{Stripped \texttt{clang -O0 -S -emit-llvm}}\label{fig:mulll0}
    \end{minipage}
 \end{figure}
-Another approach is that of Figure \ref{fig:mulll1}, which uses so-called 'phi nodes' instead.  These are a type of instruction that evaluates to a specified operand depending on which predecessor block was executed immediately prior. This circumvents the need for the same level of interior mutability as is achieved by reading/writing to memory, without violating the properties of SSA. By copying a value from the end of a predecessor to the beginning of the current block.
+\noindent Another approach is that of Figure \ref{fig:mulll1}, which uses so-called 'phi nodes' instead.  These are a type of instruction that evaluates to a specified operand depending on which predecessor block was executed immediately prior. This circumvents the need for the same level of interior mutability as is achieved by reading/writing to memory, without violating the properties of SSA. By copying a value from the end of a predecessor to the beginning of the current block.
 A Phi node represents a point in the program where the control flow merges, and it selects the appropriate version of a variable based on the path taken. This ensures that the data flow is well-defined and allows for easy analysis across different control flow paths.
 
 
@@ -451,7 +451,7 @@ let flatten ((head, tail) : Ll.cfg) : insn list =
   named_opt head @ (List.map named tail |> List.flatten)
 \end{minted}
 
-This is done to simplify lookup of which graph vertex corresponds to the \(n\)th instruction/terminator.
+\noindent This is done to simplify lookup of which graph vertex corresponds to the \(n\)th instruction/terminator. Labels, while present in the flattened list, aren't considered as they have no inherent function other than labelling the leader instruction to branch to.
 
 
 %* description of blocks, how they connect etc.
@@ -471,7 +471,8 @@ This is done to simplify lookup of which graph vertex corresponds to the \(n\)th
 
 Translating IR with an unbounded number of variables to a CPU with a bounded number of registers involves the process of assigning each variable a register such that no value that may be needed in the future is overwritten. %Therefore, any variable that may be used in the future is considered \textit{live}, and said to be in interference with any other variable live at any intersecting point.
 Variables that are in use at a given program point are considered \textit{live}, and although variables can be assigned the same register, %if they are not in interference
-variables that are live at the same time (i.e. at intersecting program points) cannot, in which case they are also said to be in interference with one another.
+variables that are live at the same time (i.e. at intersecting program points) cannot, %FIXME: why not?
+in which case they are also said to be in interference with one another.
  Variables that are not in interference can be assigned the same register, and finding the precise points at which any variable is live is trivial for linear sequences of instructions. However, when conditional branching is introduced, deriving the path of execution becomes undecidable. % TODO: finish this sentence
 
 For instance, suppose a function that calls another:
@@ -725,21 +726,19 @@ define i32 @main (i32 %0, i8* %1) {
 \label{tab:countll-steps}
 \end{table}
 
-This is unnoticeable for snippets of marginal size like most examples included, but when applied to functions with a significant amount of def-use paths, it can be quite consequential. For \texttt{tests/sha256.ll} for instance, the running times are effectively doubled on x86-64:
+\noindent This is unnoticeable for snippets of marginal size like most examples included, but when applied to functions with a significant amount of def-use paths, it can be quite consequential. For \texttt{tests/sha256.ll} for instance, the running time of this analysis is effectively doubled:
 
 \begin{minted}{bash}
 $ time dune exec build -- tests/sha256.ll  -t lva -r
-[..]
-dune exec build [..] -t lva -r  33,69s user 0,04s system 99% cpu 33,765 total
+33,69s user 0,04s system 99% cpu 33,765 total
 $ time dune exec build -- tests/sha256.ll  -t lva
-[..]
-dune exec build [..] -t lva  17,26s user 0,05s system 99% cpu 17,335 total
+17,26s user 0,05s system 99% cpu 17,335 total
 \end{minted}
 
 
 \subsection{Interference Graph}
 
-The purpose for conducting dataflow analysis as above is finding variables that may be assigned the same register. This is done by building an interference graph, which is an undirected graph, whose nodes represent variables and edges that signify interference between them, i.e. variables \(a\) and \(b\) live at intersecting program points is represented with an edge \((a,b)\).
+The purpose of conducting dataflow analysis as above is finding variables that may be assigned the same register. This is done by building an interference graph, which is an undirected graph, whose nodes represent variables and edges that signify interference between them, i.e. variables \(a\) and \(b\) live at intersecting program points is represented with an edge \((a,b)\).
 
 
 Constructing an interference graph only depends on the \textit{live-out} set and type of instruction. If the instruction defines a variable, said variable is in interference with all variables in the \textit{live-out} set. There is one exception however: according to the Appel text, move instructions (i.e. phi nodes in the case of SSA form) are given special consideration. The purpose of phi nodes is to copy/move a certain value from a certain predecessor, so they are not necessarily in conflict for being live at the same time. Rather it would often benefit if they were assigned the same register to spare unnecessary moves. % TODO: uddyb hvorfor de ikke er i interference?
@@ -749,15 +748,22 @@ Because of this, for any phi node of the form
 \begin{equation}
   a = \Phi (b_1, ..., b_n) \label{phi}
 \end{equation}
-add edges to all \textit{live-out} variables not in \(\{b_1, ..., b_n\}\):
+add edges to all \textit{live-out} variables not in \(\{b_1, ..., b_n\}\)
 \[
-  \forall b_j \in \mathit{out}[i] \setminus \{b_1, ..., b_n\}, \text{add\_edge}(a, b_j)
+  \forall b_j \in \mathit{out}[i] \setminus \{b_1, ..., b_n\}, \text{add\_edge}(a, b_j),
 \]
-For any other instruction that defines a variable \(a\)
+and for any other instruction that defines a variable \(a\)
 \[
   \forall b_j \in \{b_1, ..., b_n\}, \text{add\_edge}(a, b_j).
 \]
-Although the Appel text \cite{tiger} describes interference of variables with concrete registers as well as overlapping variables, this isn't considered in this implementation. % FIXME: why??
+Although the Appel text \cite{tiger} describes interference of variables with concrete registers as well as overlapping variables, this isn't considered in this implementation % FIXME: why??
+for simplicity's sake.
+
+Again the \texttt{OCamlgraph} library is used, but this time \texttt{Imperative.Graph.Abstract} is parameterized over the aforementioned set type \texttt{S.SS.t}. % FIXME: whyyy????
+
+%module G = Imperative.Graph.Abstract (struct
+  %type t = S.SS.t
+%end)
 
 
 
@@ -867,7 +873,7 @@ The primary text is \textit{Linear Scan Register Allocation} \cite{linear}, the 
 %% * jump flags for comparison
 
 
-\subsection{\lstinline!LLVM--! instruction set}
+\subsection{LLVM-{}- instruction set}
 
 %The intermediate representation emitted by the frontend of a compiler serves as a stepping stone independent of the target architecture. The \lstinline!LLVM! infrastructure is the industry standard in terms of bridging this gap and was consequently the library used to translate the semantically annotated abstract syntax tree to executable machine code in the 2022 compilers course. As this project is an expansion on this, it follows naturally to build on this. 
 
@@ -897,9 +903,9 @@ The branching for most of these is trivial: after successful execution the flow 
 \end{enumerate}
 
 %%%
-\subsection{Translating \lstinline!LLVM--! to x86}
+\subsection{Translating LLVM-{}- to x86}
 
-Translating each IR instruction to x86 correctly is a matter of eliminating unintended side-effects. Each LLVM-- instruction is defined to have only one purpose, %% FIXME is purpose the right word?
+Translating each IR instruction to x86 correctly is a matter of eliminating unintended side-effects. Each LLVM-{}- instruction is defined to have only one purpose, %% FIXME is purpose the right word?
 as concepts such as calling conventions, stack frames, or a \lstinline!FLAGS! register are completely abstracted over in order to remain platform independent.
 
 In contrast, the x86 \textit{instruction set architecture} (ISA) is targeting a  \textit{complex instruction set computer} (CISC) family of processors, the instructions of which perform a much broader set of operations \cite[p.~190]{tiger}. This is is in part due to pipelining, i.e. an abstraction over the concrete implementation of the actual processor, which in turn is made for the sake of performance.
@@ -980,7 +986,7 @@ _main$9:
    \end{minipage}
 \end{figure}
 
-Notice for instance Figure \ref{fig:square0ll} which has three phi nodes: two in  block 3 and one in block 9, i.e. \texttt{\%0} needs to be copied to \texttt{\%4} when control is transferred from block 1 and \texttt{\%7} when transferred from block 3. Likewise the immediate value \texttt{\$0} must be copied to \texttt{\%5} when transferred from block 1 and \texttt{\%6} when transferred from block 3.
+\noindent Notice for instance Figure \ref{fig:square0ll} which has three phi nodes: two in  block 3 and one in block 9, i.e. \texttt{\%0} needs to be copied to \texttt{\%4} when control is transferred from block 1 and \texttt{\%7} when transferred from block 3. Likewise the immediate value \texttt{\$0} must be copied to \texttt{\%5} when transferred from block 1 and \texttt{\%6} when transferred from block 3.
 All of the relevant translation can be seen in the fragment on Figure \ref{fig:square0s}. After the comparison operation on lines 4-6 that check if the boolean condition of \texttt{\%2} is nonzero and setting \texttt{FLAGS} register accordingly, \texttt{\$0} is moved into
 \(\mathit{assign}[\texttt{\%1}]\) in preparation
 of transferring to \texttt{\_main\$9} if the zero flag indeed is set. If not, execution is continued in which case both \(\mathit{assign}[\texttt{\%6}]\) and \(\mathit{assign}[\texttt{\%7}]\) are moved into \(\mathit{assign}[\texttt{\%4}]\) and \(\mathit{assign}[\texttt{\%5}]\) respectively, in preperation for continuing execution at \texttt{\_main\$3}.
@@ -1004,7 +1010,7 @@ Validating the correctness of each instruction translation is a complicated task
 % TODO: kommenter på stripper
 
 \subsubsection{Debugger Harness}
-A more elaborate way of testing correctness of translation is to assert that there are no effects except for those intended. One way of achieving this is to check if a group of x86 instructions representing a single LLVM-- operation change any values except those expected. An approach to this is to attach a debugger, insert a breakpoint before every LLVM-- instruction, and ensure that only the intended registers are altered.
+A more elaborate way of testing correctness of translation is to assert that there are no effects except for those intended. One way of achieving this is to check if a group of x86 instructions representing a single LLVM-{}- operation change any values except those expected. An approach to this is to attach a debugger, insert a breakpoint before every LLVM-{}- instruction, and ensure that only the intended registers are altered.
 
 To achieve this, only a few changes need to be made to the codebase. A debug flag is introduced, which inserts a label before every instruction by adding a \lstinline!Breakpoint! variant of the \lstinline!ins! type before the assembly emitted of that specific operation. A unique identifier as well as a list of changes expected to be made is encoded. 
 This includes a bitmask of GPRs that can possibly be changed (aside from the scratch registers of course) as well as which parts of the stack may be modified. % TODO: implement the stack checker
@@ -1021,7 +1027,7 @@ To validate that this works as intended,
 \section{Evaluation}
 
 While there are many approaches to assessing the quality of translation, one of the primary means is to simply measure the time taken to execute the code generated. 
-Assuming the translation is sound given the previous steps taken to validate correctness in translating \lstinline!LLVM--! to x86, it is a solid foundation for future optimizations. While there are certainly other factors worth measuring, only runtime performance is considered for this project. % FIXME: check if this is still true
+Assuming the translation is sound given the previous steps taken to validate correctness in translating LLVM-{}- to x86, it is a solid foundation for future optimizations. While there are certainly other factors worth measuring, only runtime performance is considered for this project. % FIXME: check if this is still true
 
 %There are different approaches to assessing how well a compiler backend translates IR to machine code targeting a specific architecture and platform. 
 
