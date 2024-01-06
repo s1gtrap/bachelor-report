@@ -761,6 +761,37 @@ for simplicity's sake.
 
 Again the \texttt{OCamlgraph} library is used, but this time \texttt{Imperative.Graph.Abstract} is parameterized over the aforementioned set type \texttt{S.SS.t}. % FIXME: whyyy????
 
+
+\begin{figure}[H]
+\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let interf (params : Ll.uid list) (insns : Cfg.insn list) _ (out : S.SS.t array)
+    : G.V.t S.table * G.t =
+  let g = G.create () in
+  let vert e t = (* .. *) in
+  let vert2 t e = vert e t |> snd and vert3 e t = vert e t |> snd in
+  (* add params *)
+  let t = List.fold_left vert2 S.ST.empty params in
+  (* connect all params *)
+  let edge v1 v2 t = (* .. *) in
+  let param t p1 =
+    let param t p2 = if p1 <> p2 then edge p1 p2 t else t in
+    List.fold_left param t params
+  in
+  let t = List.fold_left param t params in
+  (* add all defs *)
+  let setverts t s = S.SS.fold vert3 s t in
+  let t = List.map (def S.SS.empty) insns |> List.fold_left setverts t in
+  let defoutedges t (i, n) =
+    let defs = def S.SS.empty n in
+    let outedge e1 t = S.SS.fold (edge e1) out.(i) t in
+    S.SS.fold outedge defs t
+  in
+  let t = List.mapi (fun i n -> (i, n)) insns |> List.fold_left defoutedges t in
+  (t, g)
+\end{minted}
+\caption{Overall implementation of \texttt{dataflow}\label{fig:dataflow}}
+\end{figure}
+
 %module G = Imperative.Graph.Abstract (struct
   %type t = S.SS.t
 %end)
