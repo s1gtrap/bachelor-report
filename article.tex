@@ -975,7 +975,7 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
       \vspace{0.5em}
       \caption{Stack}\label{fig:countdown.stack8}
     \end{subfigure}
-    \caption{Push \texttt{\%c1}}
+    \caption{Push \texttt{\%c1}}\label{fig:countdown8}
   \end{minipage}%
   \begin{minipage}[c]{0.32\linewidth}
     \begin{subfigure}[b]{0.70\textwidth}
@@ -990,7 +990,7 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
       \vspace{0.5em}
       \caption{Stack}\label{fig:countdown.stack9}
     \end{subfigure}
-    \caption{Pop \texttt{\%c1}}
+    \caption{Pop \texttt{\%c1}}\label{fig:countdown9}
   \end{minipage}%
   \begin{minipage}[c]{0.32\linewidth}
     \begin{subfigure}[b]{0.70\textwidth}
@@ -1008,7 +1008,7 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
   \end{minipage}%
 \end{figure}
 
-Dolor sit amet badungadong and so on
+\noindent As the last variable \texttt{\%c1} is pushed in Figure \ref{fig:countdown8} and an empty graph remains, the process of reconstructing the graph can begin. When popping \texttt{\%c1} in Figure \ref{fig:countdown9}, it can be assigned any of the two colors as it has no neigbors adjacent, so either is chosen. On the other hand, when assigning \texttt{\%argc}, it's only adjacent naighbor \texttt{\%c1} is already assigned red so only blue remains. Likewise, for \texttt{\%argv} and \texttt{\%cn} their only immediately adjacent neighbor of \texttt{\%argc} causes them to be assigned red as can be seen on Figure \ref{fig:countdown11} and \ref{fig:countdown12}.
 
 \begin{figure}[H]
   \centering
@@ -1023,7 +1023,7 @@ Dolor sit amet badungadong and so on
       \vspace{0.5em}
       \caption{Stack}\label{fig:countdown.stack11}
     \end{subfigure}
-    \caption{Pop \texttt{\%argv}} 
+    \caption{Pop \texttt{\%argv}} \label{fig:countdown11}
   \end{minipage}%
   \begin{minipage}[c]{0.32\linewidth}
     \begin{subfigure}[b]{0.70\textwidth}
@@ -1033,7 +1033,7 @@ Dolor sit amet badungadong and so on
     \begin{subfigure}[b]{0.27\textwidth}
       \caption{Stack}\label{fig:countdown.stack12} 
     \end{subfigure}
-    \caption{Pop \texttt{\%c1}}
+    \caption{Pop \texttt{\%c1}}\label{fig:countdown12} 
   \end{minipage}%
 \end{figure}
 
