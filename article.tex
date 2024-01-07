@@ -1036,7 +1036,15 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
     \caption{Pop \texttt{\%c1}}\label{fig:countdown12} 
   \end{minipage}%
 \end{figure}
-
+\noindent The final coloring of Figure \ref{fig:countdown12} leads to the assignment 
+\begin{align*}
+  \mathit{assign[\texttt{\%argv}]} = \mathit{assign[\texttt{\%c1}]} = \mathit{assign[\texttt{\%cn}]} &= \texttt{\%red}\\
+  \mathit{assign[\texttt{\%argc}]} &= \texttt{\%blue}
+\end{align*}
+and the spilled variable \texttt{\%c2}
+\[
+  \mathit{assign[\texttt{\%c2}]} = \texttt{stackslot(0)}
+\]
 
 
 %  (i.e. \(\mathit{deg}(n) < k\))
