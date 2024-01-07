@@ -1051,7 +1051,9 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
 
 Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes.  This is similar to but  not the same as  the lack of interference edges between variables that are subject to move operations. This is because variables \(a\) and \(b\) may still be assigned different registers or even spilled if,  for instance, either of them are of significant degree. Coalescing joins nodes \(a\) and \(b\) to node \(ab\) preserving the edges of both to maintain soundness.
 
-Since all edges are preserved, the resulting node \(ab\) may be of a much higher degree. Because of this, only strategies that produce a \(k\)-colorable graph are worth considering, as additional spills negate the purpose entirely.
+Since all edges are preserved, the resulting node \(ab\) may be of a much higher degree. Because of this, only strategies that produce a \(k\)-colorable graph are worth considering, as additional spills negate the purpose entirely. One of the  strategies introduced in the Appel text is the \textit{Briggs} strategy  \cite[232]{tiger}, in which nodes \(a\) and \(n\) can be coalesced if and only if the resulting node \(ab\) is of insignificant degree  (i.e. \(\leq K\)).
+
+The strategy Since the only move operations in use in LLVM-{}- are phi nodes, 
 
 \section{Linear Scan}
 Another approach that does not depend on liveness analysis i the linear scan algorithm.
