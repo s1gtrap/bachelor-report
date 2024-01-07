@@ -862,6 +862,38 @@ In this case a node is chosen to be spilled after which the process is started o
 
 To perform the simplication algorithm on the previous example of Figure \ref{fig:countdown.ll}, its interference graph seen on Figure \ref{fig:countdown.dot} only has one node of degree 4 with the ones remaining all being \(\leq 2\). This wouldn't be a problem on modern day processors most of which have \textasciitilde 16 or so GPRs, but for the sake of clearness one can imagine a register machine of \(k=2\) working registers.
 
+If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it is then removed and pushed to a stack. In Figure \ref{fig:countdown.dot} only \texttt{\%argv} and \texttt{\%c1} are of insignificant degree, so either of those is chosen to be removed (represented with dashed borders and edges).
+
+
+\begin{figure}[H]
+\centering
+  \begin{minipage}[b]{0.48\textwidth}
+    \begin{subfigure}{0.3\textwidth}
+      \includesvg[height=12em]{countdown.simple2}
+      \caption{Graph}\label{fig:countdown.dot2}
+    \end{subfigure}
+\hfill
+    \begin{subfigure}{0.18\textwidth}
+      \texttt{\%c1}
+      \caption{Stack}
+      \label{fig:second}
+    \end{subfigure}
+   \end{minipage}
+  \begin{minipage}[b]{0.48\textwidth}
+    \begin{subfigure}{0.3\textwidth}
+      \includesvg[height=12em]{countdown.simple2}
+      \caption{Graph}\label{fig:countdown.dot2}
+    \end{subfigure}
+\hfill
+    \begin{subfigure}{0.18\textwidth}
+      \texttt{\%c1}
+      \caption{Stack}
+      \label{fig:second}
+    \end{subfigure}
+   \end{minipage}
+\end{figure}
+
+
 %  (i.e. \(\mathit{deg}(n) < k\))
 
 %It must hold that \(G-\{n\}\) is \(k\)-colorable if \(G\) is \(k\)-colorable 
