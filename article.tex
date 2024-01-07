@@ -704,7 +704,7 @@ define i32 @main (i32 %0, i8* %1) {
 
 \begin{table}[H]
 \makebox[\textwidth][c]{
-\setlength{\tabcolsep}{1pt}
+\setlength{\tabcolsep}{0.9pt}
 \begin{NiceTabular}{|c|c c|c c|c c|c c|c c|c c|c c|c c|c c|c c|c c|c c|}
   \hline
   i & use & def & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out\\
@@ -789,7 +789,35 @@ let interf (params : Ll.uid list) (insns : Cfg.insn list) _ (out : S.SS.t array)
   let t = List.mapi (fun i n -> (i, n)) insns |> List.fold_left defoutedges t in
   (t, g)
 \end{minted}
-\caption{Overall implementation of \texttt{dataflow}\label{fig:dataflow}}
+\caption{Overall implementation of \texttt{interf}\label{fig:interf}}
+\end{figure}
+
+\noindent For instance, the LLVM-{}- program of Figure \ref{fig:countdown.ll}, a simple handwritten program that counts down from \texttt{\%argc}, would translate the interference graph of Figure \ref{fig:countdown.dot}. % TODO: explain step wise?
+
+\begin{figure}[H]
+     \centering
+     \begin{minipage}[b]{0.57\textwidth}
+     \begin{minted}[bgcolor=LightGray]{llvm}
+define i32 @main (i32 %argc, i8** %argv) {
+entry:
+ br label %loop
+loop:
+ %c1 = phi i32 [%argc, %entry], [%c2, %loop]
+ call void @printf (i8* @fmt, i32 %c1)
+ %c2 = sub i32 %c1, 1
+ %cn = icmp sgt i32 %c2, 0
+ br i1 %cn, label %loop, label %exit
+exit:
+ ret i32 0
+}
+     \end{minted}
+     \caption{\texttt{cat tests/countdown.ll}}\label{fig:countdown.ll}
+   \end{minipage}
+   \begin{minipage}[b]{0.42\textwidth}
+     \centering
+     \includesvg[height=15em]{countdown.simple}
+     \caption{\texttt{dune exec build -- -t dot}}\label{fig:countdown.dot}
+   \end{minipage}
 \end{figure}
 
 %module G = Imperative.Graph.Abstract (struct
@@ -830,6 +858,9 @@ The \textit{simplification} algorithm, also known as Chaitin's algorithm \cite{c
 In this case a node is chosen to be spilled after which the process is started over. This is repeated until every node has been removed successfully, after which the vertices are assigned by popping them from the stack. Each of these are known to be \(k\)-colorable because of the earlier criteria of having less than \(k\) neighbors.
 
 %Let \(k\) be the number of working registers available on the target architecture. After building the interference graph \(G\), a node \(n\) with fewer than \(k\) neighbors is chosen. As \(n\) has at most \(k-1\) neighbors, it can be removed safely, effectively simplifying \(G\). It is pushed to a stack to preserve the order in which they are removed so that \(G\) can be rebuilt and the corresponding registers can be assigned correctly once a \(k\)-colorable assignment is found.
+
+
+To perform the simplication algorithm on the previous example of Figure \ref{fig:countdown.ll}, its interference graph seen on Figure \ref{fig:countdown.dot} only has one node of degree 4 with the ones remaining all being \(\leq 2\). This wouldn't be a problem on modern day processors most of which have \textasciitilde 16 or so GPRs, but for the sake of clearness one can imagine a register machine of \(k=2\) working registers.
 
 %  (i.e. \(\mathit{deg}(n) < k\))
 

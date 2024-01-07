@@ -1,0 +1,18 @@
+graph G {
+  "{ argc }";
+  "{ argv }";
+  "{ c1 }";
+  "{ c2 }";
+  "{ cn }";
+
+
+  "{ argv }" -- "{ argc }";
+  "{ c1 }" -- "{ argc }";
+  "{ c2 }" -- "{ argc }";
+    {rank=same; "{ argc }" -- "{ cn }";}
+  "{ cn }" -- "{ c2 }";
+  
+  edge [style=invis]
+  "{ argv }" -- "{ cn }";
+    {rank=same; "{ argv }" -- "{ c1 }";}
+  }
