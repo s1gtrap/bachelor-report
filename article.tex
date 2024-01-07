@@ -862,7 +862,7 @@ In this case a node is chosen to be spilled after which the process is started o
 
 To perform the simplication algorithm on the previous example of Figure \ref{fig:countdown.ll}, its interference graph seen on Figure \ref{fig:countdown.dot} only has one node of degree 4 with the ones remaining all being \(\leq 2\). This wouldn't be a problem on modern day processors most of which have \textasciitilde 16 or so GPRs, but for the sake of clearness one can imagine a register machine of \(k=2\) working registers.
 
-If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it is then removed and pushed to a stack. In Figure \ref{fig:countdown.dot} only \texttt{\%argv} and \texttt{\%c1} are of insignificant degree, so either of those is chosen to be removed (represented with dashed borders and edges).
+If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it is then removed and pushed to a stack. In Figure \ref{fig:countdown.dot} only \texttt{\%argv} and \texttt{\%c1} are of insignificant degree, so either of those is chosen to be removed (represented with dashed borders and edges) as can be seen on Figure \ref{fig:countdown.dot2} and \ref{fig:countdown.dot3} and pushed to the stack of variables to be colored as can be seen on Figure \ref{fig:countdown.stack2} and \ref{fig:countdown.stack3}.
 
 
 
@@ -908,7 +908,7 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
     \caption{Spill \texttt{\%c2}}
   \end{minipage}%
 \end{figure}
-\noindent From this point onwards  nothing can be done to further simplify the graph as all of the remaining nodes are of significant degree (\(\leq 2\)). Therefore, one of the remaining nodes is spilled to the memory stack and removed completely from the graph.
+\noindent From this point onwards  nothing can be done to further simplify the graph as all of the remaining nodes are of significant degree (\(\geq 2\)). Therefore, one of the remaining nodes is spilled to memory and entirely removed from the graph as can be seen on Figure \ref{fig:countdown.dot4} and the stack reset as can be seen on Figure \ref{fig:countdown.stack4}.
 
 \begin{figure}[H]
   \centering
@@ -956,7 +956,7 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
   \end{minipage}%
 \end{figure}
 
-\noindent Lorem ipsum dolor blah blah
+\noindent After spilling \texttt{\%c2}, the process is repeated. First by pushing \texttt{\%cn} (Figure \ref{fig:countdown.dot5} and \ref{fig:countdown.stack5}), then \texttt{\%argv} (Figure \ref{fig:countdown.dot6} and \ref{fig:countdown.stack6}) and finally \texttt{\%argc} (Figure \ref{fig:countdown.dot7} and \ref{fig:countdown.stack7}). One thing of note is the fact that the order in which this is happening is irrelevant, so long as variables pushed are of insignificant degree. For instance, \texttt{\%argc} was of degree 3 in Figure \ref{fig:countdown.dot4}, but as more and more of its neighbors are pushed it's degree decreases to a point where only \texttt{\%argc} and \texttt{\%c1} are yet to be pushed to the stack.
 
 
 \begin{figure}[H]
