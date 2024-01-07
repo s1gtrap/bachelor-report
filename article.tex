@@ -865,6 +865,96 @@ To perform the simplication algorithm on the previous example of Figure \ref{fig
 If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it is then removed and pushed to a stack. In Figure \ref{fig:countdown.dot} only \texttt{\%argv} and \texttt{\%c1} are of insignificant degree, so either of those is chosen to be removed (represented with dashed borders and edges).
 
 
+
+
+% Side by side figures 
+\begin{figure}[H]
+  \centering
+  \begin{minipage}[b]{0.32\linewidth}
+    \begin{subfigure}[b]{0.70\textwidth}
+      \includesvg[height=10em]{countdown.simple2}
+      \caption{Graph}\label{fig:countdown.dot2}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.27\textwidth}
+      \begin{gather*}
+        \texttt{\%c1}
+      \end{gather*}
+      \caption{Stack}\label{fig:countdown.stack2}
+    \end{subfigure}
+    \caption{Remove \texttt{\%c1}}
+  \end{minipage}%
+  \begin{minipage}[b]{0.32\linewidth}
+    \begin{subfigure}[b]{0.70\textwidth}
+      \includesvg[height=10em]{countdown.simple3}
+      \caption{Graph}\label{fig:countdown.dot3}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.27\textwidth}
+      \begin{gather*}
+        \texttt{\%argv}\\
+        \texttt{\%c1}
+      \end{gather*}
+      \caption{Stack}\label{fig:countdown.stack3}
+    \end{subfigure}
+    \caption{Remove \texttt{\%argv}}
+  \end{minipage}%
+  \begin{minipage}[b]{0.32\linewidth}
+    \begin{subfigure}[b]{0.70\textwidth}
+      \includesvg[height=6em]{countdown.simple4}
+      \caption{Graph}\label{fig:countdown.dot4}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.27\textwidth}
+      \begin{gather*}
+      \end{gather*}
+      \caption{Stack}\label{fig:countdown.stack4}
+    \end{subfigure}
+    \caption{Spill \texttt{\%c2}}
+  \end{minipage}%
+\end{figure}
+\noindent From this point onwards  nothing can be done to further simplify the graph as all of the remaining nodes are of significant degree (\(\leq 2\)). Therefore, one of the remaining nodes is spilled to the memory stack and removed completely from the graph.
+
+\begin{figure}[H]
+  \centering
+  \begin{minipage}[c]{0.32\linewidth}
+    \begin{subfigure}[b]{0.70\textwidth}
+      \includesvg[height=6em]{countdown.simple5} 
+      \caption{Graph}\label{fig:countdown.dot5}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.27\textwidth}
+      \begin{gather*}
+        \texttt{\%cn}
+      \end{gather*}
+      \caption{Stack}\label{fig:countdown.stack5}
+    \end{subfigure}
+    \caption{Remove \texttt{\%cn}}
+  \end{minipage}%
+  \begin{minipage}[c]{0.32\linewidth}
+    \begin{subfigure}[b]{0.70\textwidth}
+      \includesvg[height=6em]{countdown.simple6} 
+      \caption{Graph}\label{fig:countdown.dot6}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.27\textwidth}
+      \begin{gather*}
+        \texttt{\%argv}\\
+        \texttt{\%c1}
+      \end{gather*}
+      \caption{Stack}\label{fig:countdown.stack6}
+    \end{subfigure}
+    \caption{Remove \texttt{\%argv}}
+  \end{minipage}%
+  \begin{minipage}[c]{0.32\linewidth}
+    \begin{subfigure}[b]{0.70\textwidth}
+      \includesvg[height=10em]{countdown.simple2}
+      \caption{Graph}\label{fig:countdown.dot2}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.27\textwidth}
+      \includegraphics[width=\linewidth]{example-image-b}
+      \caption{Stack}\label{fig:countdown.dot2}
+    \end{subfigure}
+    \caption{Image B}
+  \end{minipage}%
+\end{figure}
+
+
 \begin{figure}[H]
 \centering
   \begin{minipage}[b]{0.48\textwidth}

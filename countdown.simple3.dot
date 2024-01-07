@@ -1,0 +1,19 @@
+graph G {
+  fontname="monospace"
+  "{ %argc }";
+  "{ %argv }"[style=dashed];
+  "{ %c1 }" [style=dashed];
+  "{ %c2 }";
+  "{ %cn }";
+
+
+  "{ %argv }" -- "{ %argc }"[style=dashed];
+  "{ %c1 }" -- "{ %argc }" [style=dashed];
+  "{ %c2 }" -- "{ %argc }";
+    {rank=same; "{ %argc }" -- "{ %cn }";}
+  "{ %cn }" -- "{ %c2 }";
+  
+  edge [style=invis]
+  "{ %argv }" -- "{ %cn }";
+    {rank=same; "{ %argv }" -- "{ %c1 }";}
+  }
