@@ -876,12 +876,12 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
       \caption{Graph}\label{fig:countdown.dot2}
     \end{subfigure}
     \begin{subfigure}[b]{0.27\textwidth}
-      \begin{gather*}
+      \centering
         \texttt{\%c1}
-      \end{gather*}
+        \vspace{0.5em}
       \caption{Stack}\label{fig:countdown.stack2}
     \end{subfigure}
-    \caption{Remove \texttt{\%c1}}
+    \caption{Push \texttt{\%c1}}
   \end{minipage}%
   \begin{minipage}[b]{0.32\linewidth}
     \begin{subfigure}[b]{0.70\textwidth}
@@ -889,13 +889,13 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
       \caption{Graph}\label{fig:countdown.dot3}
     \end{subfigure}
     \begin{subfigure}[b]{0.27\textwidth}
-      \begin{gather*}
+      \centering
         \texttt{\%argv}\\
         \texttt{\%c1}
-      \end{gather*}
+        \vspace{0.5em}
       \caption{Stack}\label{fig:countdown.stack3}
     \end{subfigure}
-    \caption{Remove \texttt{\%argv}}
+    \caption{Push \texttt{\%argv}}
   \end{minipage}%
   \begin{minipage}[b]{0.32\linewidth}
     \begin{subfigure}[b]{0.70\textwidth}
@@ -903,8 +903,6 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
       \caption{Graph}\label{fig:countdown.dot4}
     \end{subfigure}
     \begin{subfigure}[b]{0.27\textwidth}
-      \begin{gather*}
-      \end{gather*}
       \caption{Stack}\label{fig:countdown.stack4}
     \end{subfigure}
     \caption{Spill \texttt{\%c2}}
@@ -920,12 +918,12 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
       \caption{Graph}\label{fig:countdown.dot5}
     \end{subfigure}
     \begin{subfigure}[b]{0.27\textwidth}
-      \begin{gather*}
+      \centering
         \texttt{\%cn}
-      \end{gather*}
+        \vspace{0.5em}
       \caption{Stack}\label{fig:countdown.stack5}
     \end{subfigure}
-    \caption{Remove \texttt{\%cn}}
+    \caption{Push \texttt{\%cn}}
   \end{minipage}%
   \begin{minipage}[c]{0.32\linewidth}
     \begin{subfigure}[b]{0.70\textwidth}
@@ -933,55 +931,112 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
       \caption{Graph}\label{fig:countdown.dot6}
     \end{subfigure}
     \begin{subfigure}[b]{0.27\textwidth}
-      \begin{gather*}
+      \centering
         \texttt{\%argv}\\
-        \texttt{\%c1}
-      \end{gather*}
+        \texttt{\%cn}
+        \vspace{0.5em}
       \caption{Stack}\label{fig:countdown.stack6}
     \end{subfigure}
-    \caption{Remove \texttt{\%argv}}
+    \caption{Push \texttt{\%argv}}
   \end{minipage}%
   \begin{minipage}[c]{0.32\linewidth}
     \begin{subfigure}[b]{0.70\textwidth}
-      \includesvg[height=10em]{countdown.simple2}
-      \caption{Graph}\label{fig:countdown.dot2}
+      \includesvg[height=6em]{countdown.simple7} 
+      \caption{Graph}\label{fig:countdown.dot7}
     \end{subfigure}
     \begin{subfigure}[b]{0.27\textwidth}
-      \includegraphics[width=\linewidth]{example-image-b}
-      \caption{Stack}\label{fig:countdown.dot2}
+      \centering
+      \texttt{\%argc}\\
+      \texttt{\%argv}\\
+      \texttt{\%cn}
+      \vspace{0.5em}
+      \caption{Stack}\label{fig:countdown.stack7}
     \end{subfigure}
-    \caption{Image B}
+    \caption{Push \texttt{\%argc}}
   \end{minipage}%
 \end{figure}
 
+\noindent Lorem ipsum dolor blah blah
+
 
 \begin{figure}[H]
-\centering
-  \begin{minipage}[b]{0.48\textwidth}
-    \begin{subfigure}{0.3\textwidth}
-      \includesvg[height=12em]{countdown.simple2}
-      \caption{Graph}\label{fig:countdown.dot2}
+  \centering
+  \begin{minipage}[c]{0.32\linewidth}
+    \begin{subfigure}[b]{0.70\textwidth}
+      \includesvg[height=6em]{countdown.simple8} 
+      \caption{Graph}\label{fig:countdown.dot8}
     \end{subfigure}
-\hfill
-    \begin{subfigure}{0.18\textwidth}
-      \texttt{\%c1}
-      \caption{Stack}
-      \label{fig:second}
+    \begin{subfigure}[b]{0.27\textwidth}
+      \centering
+      \texttt{\%c1}\\
+      \texttt{\%argc}\\
+      \texttt{\%argv}\\
+      \texttt{\%cn}
+      \vspace{0.5em}
+      \caption{Stack}\label{fig:countdown.stack8}
     \end{subfigure}
-   \end{minipage}
-  \begin{minipage}[b]{0.48\textwidth}
-    \begin{subfigure}{0.3\textwidth}
-      \includesvg[height=12em]{countdown.simple2}
-      \caption{Graph}\label{fig:countdown.dot2}
+    \caption{Push \texttt{\%c1}}
+  \end{minipage}%
+  \begin{minipage}[c]{0.32\linewidth}
+    \begin{subfigure}[b]{0.70\textwidth}
+      \includesvg[height=6em]{countdown.simple9} 
+      \caption{Graph}\label{fig:countdown.dot9}
     \end{subfigure}
-\hfill
-    \begin{subfigure}{0.18\textwidth}
-      \texttt{\%c1}
-      \caption{Stack}
-      \label{fig:second}
+    \begin{subfigure}[b]{0.27\textwidth}
+      \centering
+      \texttt{\%argc}\\
+      \texttt{\%argv}\\
+      \texttt{\%cn}
+      \vspace{0.5em}
+      \caption{Stack}\label{fig:countdown.stack9}
     \end{subfigure}
-   \end{minipage}
+    \caption{Pop \texttt{\%c1}}
+  \end{minipage}%
+  \begin{minipage}[c]{0.32\linewidth}
+    \begin{subfigure}[b]{0.70\textwidth}
+      \includesvg[height=6em]{countdown.simple10} 
+      \caption{Graph}\label{fig:countdown.dot10}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.27\textwidth}
+      \centering
+      \texttt{\%argv}\\
+      \texttt{\%cn}
+      \vspace{0.5em}
+      \caption{Stack}\label{fig:countdown.stack10}
+    \end{subfigure}
+    \caption{Pop \texttt{\%argc}}
+  \end{minipage}%
 \end{figure}
+
+Dolor sit amet badungadong and so on
+
+\begin{figure}[H]
+  \centering
+  \begin{minipage}[c]{0.32\linewidth}
+    \begin{subfigure}[b]{0.70\textwidth}
+      \includesvg[height=6em]{countdown.simple11} 
+      \caption{Graph}\label{fig:countdown.dot11}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.27\textwidth}
+      \centering
+      \texttt{\%cn}
+      \vspace{0.5em}
+      \caption{Stack}\label{fig:countdown.stack11}
+    \end{subfigure}
+    \caption{Pop \texttt{\%argv}} 
+  \end{minipage}%
+  \begin{minipage}[c]{0.32\linewidth}
+    \begin{subfigure}[b]{0.70\textwidth}
+      \includesvg[height=6em]{countdown.simple12} 
+      \caption{Graph}\label{fig:countdown.dot12}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.27\textwidth}
+      \caption{Stack}\label{fig:countdown.stack12} 
+    \end{subfigure}
+    \caption{Pop \texttt{\%c1}}
+  \end{minipage}%
+\end{figure}
+
 
 
 %  (i.e. \(\mathit{deg}(n) < k\))

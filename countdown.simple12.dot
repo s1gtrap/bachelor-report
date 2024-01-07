@@ -1,0 +1,16 @@
+graph G {
+  fontname="monospace"
+  "{ %argc }"[style=filled;fillcolor="#8888ff"];
+  "{ %argv }"[style=filled;fillcolor="#ff8888"];
+  "{ %c1 }" [style=filled;fillcolor="#ff8888"];
+  "{ %cn }" [style=filled;fillcolor="#ff8888"];
+
+
+  "{ %argv }" -- "{ %argc }";
+  "{ %c1 }" -- "{ %argc }" ;
+    {rank=same; "{ %argc }" -- "{ %cn }" }
+  
+  edge [style=invis]
+  "{ %argv }" -- "{ %cn }";
+    {rank=same; "{ %argv }" -- "{ %c1 }";}
+  }
