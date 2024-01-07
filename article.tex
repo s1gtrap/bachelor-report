@@ -816,7 +816,7 @@ exit:
    \begin{minipage}[b]{0.42\textwidth}
      \centering
      \includesvg[height=15em]{countdown.simple}
-     \caption{\texttt{dune exec build -- -t dot}}\label{fig:countdown.dot}
+     \caption{\texttt{dune exec build -{}- -t dot}}\label{fig:countdown.dot}
    \end{minipage}
 \end{figure}
 
@@ -1063,7 +1063,20 @@ Since all edges are preserved, the resulting node \(ab\) may be of a much higher
 
 Since the only move operations in use in LLVM-{}- are phi nodes, only variables that are subject to this sort of operation are eligible to be coalesced in this form. 
 Variables that may be coalesced can be thought of as having a different sort of edge, quite the opposite of interference edges, in fact they can be thought of as a sort of 'preference edge'.
-Strictly speaking, one could optimize many more mov instructions away if 
+
+When applied to the previous example (Figure \ref{fig:countdown.ll}), only \texttt{\%argc} and \texttt{\%c2} may be coalesced with \texttt{\%c1} as this is the only mov instruction. 
+
+\begin{figure}[H]
+     \centering
+   \begin{minipage}[b]{0.42\textwidth}
+     \centering
+     \includesvg[height=10em]{countdown.briggs}
+     \caption{\texttt{dune exec build -{}- -t dot}}\label{fig:countdown.dot}
+   \end{minipage}
+\end{figure}
+
+%Strictly speaking, one could optimize many more mov instructions away if 
+
 
 
 

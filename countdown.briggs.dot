@@ -1,0 +1,17 @@
+graph G {
+  "{ %argc }";
+  "{ %argv }";
+  "{ %cn }";
+  "{ %c1, %c2 }";
+
+
+  "{ %argv }" -- "{ %argc }";
+  {rank=same;"{ %argc }" -- "{ %cn }"}
+  "{ %c1, %c2 }" -- "{ %argc }";
+  "{ %c1, %c2 }" -- "{ %cn }";
+
+  edge [style=invis]
+  {rank=same;"{ %argv }" -- "{ %c1, %c2 }"}
+  
+
+}
