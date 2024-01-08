@@ -212,14 +212,14 @@ Compilation refers to the process of translating from one language to another, m
 \end{figure}
 \noindent Most operations of a general-purpose programming language are translated to a set of control, logic, and arithmetic instructions to be executed sequentially on a computer processor: a single circuit/chip, referred to as the \textit{central processing unit} (CPU), the design of which has varied and evolved over time.
 
-Most CPUs are \textit{register machines}, in that they use a limited set of \textit{general-purpose registers} (GPRs) to store working values in combination with \textit{random access memory} (RAM) for mid-term, and other I/O peripherals for long-term storage. This can largely be attributed to performance, as register machines routinely outperform \textit{stack machines} \parencite{ShiYunhe2008VmsS} that are often used in VMs.
+Most CPUs are \textit{register machines}, in that they use a limited set of \textit{general-purpose registers} (GPRs) to store working values in combination with \textit{random access memory} (RAM) for mid-term, and other I/O peripherals for long-term storage. This can largely be attributed to performance, as register machines routinely outperform \textit{stack machines} \parencite{ShiYunhe2008VmsS} that are often used in \textit{virtual machines} (VMs).
 Although register machines generally also have a stack available, as being limited to mere bytes of storage is simply infeasible for most large scale applications, using it compared to GPRs is orders of magnitudes slower \cite{latency}. % FIXME: find source
 Because of this, a crucial part of the backend stage for an optimizing compiler is assigning each variable  of the source program to a GPR in such a way that maximizes performance without sacrificing correctness.
 
 
 
 The process of assigning each variable to a GPR is referred to as \textit{register allocation}, and can be approached in several different ways. This paper will seek to implement graph coloring and linear scan and evaluate them in terms of runtime performance after compilation. %% TODO: compare with time-complexity/compile-time duration?
-The primary sources will be \textit{Modern Compiler Implementation in ML} \parencite{tiger} and \textit{Compilers: Principles, techniques, and tools} \parencite{dragon}, in addition to publications concerning the linear scan approach.
+The primary sources are \textit{Modern Compiler Implementation in ML} \parencite{tiger} and \textit{Compilers: Principles, techniques, and tools} \parencite{dragon} with regards to static analysis and graph coloring, in addition to \textit{Linear Scan Register Allocation} \cite{linear} concerning linear scan.
 
 The implementation is written in OCaml for the most part, although there is some marginal use of Python to interact with the LLVM toolchain's debugger 'LLDB'.
 
@@ -246,7 +246,7 @@ Instead of translating directly from a source language to target machine code, m
 It is by no means executable on either \(A\) or \(B\), but it is much closer to the instruction set executed on a CPU than the source language originally fed to the frontend.  This helps portability immensely, as a frontend emitting an IR no longer needs to specialize to a particular architecture, instead it can target as many as the backend supports.
 Likewise, a compiler backend will support any frontend provided that they emit correct IR.
 
-Because of this, compilation of high-level programming languages will often go no further than emitting IR, then leave the rest for a subsequent backend toolchain. This naturally leads to the LLVM toolchain, which is by far the most used compiler backend in practice. Most languages, if targeting native execution on a CPU, will have an LLVM implementation. This is true for C/C++ (Clang compiler \cite{clang}), D (LDC compiler \cite{dlang}), Swift (official Swift compiler \cite{swift}) and Rust (officilal \texttt{rustc} compiler \cite{rustc}). The use of LLVM allows for them to be compiled to completely unforeseen architectures, like web browsers with WebAssembly or even graphics cards with compute kernels \cite{backend}.
+Because of this, compilation of high-level programming languages will often go no further than emitting IR, then leave the rest for a subsequent backend toolchain. This naturally leads to the LLVM toolchain, which is by far the most used compiler backend in practice. Most languages, if targeting native execution on a CPU, will have an LLVM implementation. This is true for C/C++ (Clang compiler \cite{clang}), D (LDC compiler \cite{dlang}), Swift (official Swift compiler \cite{swift}) and Rust (official \texttt{rustc} compiler \cite{rustc}). The use of LLVM allows for them to be compiled to completely unforeseen architectures, like web browsers with WebAssembly or even graphics cards with compute kernels \cite{backend}.
 
 Conversely, managed languages such as Java and C\# target their own respective VMs, so they typically don't have much to gain from the LLVM toolchain. That said, some projects have attempted to implement LLVM in their translation of bytecode to native architectures,  such as LLILC which promised both \textit{just-in-time} (JIT) as well as \textit{ahead-of-time} (AOT) compilation \cite{dotnet}. Similarly, Kotlin (the spiritual successor of Java) that ordinarily targets the JVM has a native backend that compiles directly to machine code using LLVM, circumventing the need for a VM entirely \cite{kotlin}.
 %Meanwhile interpreted languages like JavaScript eagerly attempt use LLVM for \textit{just-in-time} (JIT) compilation % FIXME: this is not true at all lol
@@ -1071,7 +1071,7 @@ Consider the above example but with some \(k \geq 2\). the \%c1 and
 
 \begin{figure}[H]
      \centering
-   \begin{minipage}[b]{0.5\textwidth}
+   \begin{minipage}[b]{0.42\textwidth}
      \centering
      \includesvg[height=10em]{countdown.briggs}
      \caption{\texttt{dune exec build -{}- -t dot}}\label{fig:countdown.briggs.dot}
@@ -1085,7 +1085,11 @@ Consider the above example but with some \(k \geq 2\). the \%c1 and
 
 \section{Linear Scan}
 Another approach that also depends on liveness analysis is the linear scan algorithm.
-It is a simple and efficient approach that performs a linear pass over IR to produce a register assignment significantly faster than all of the steps involved with graph coloring. That said, it may be generate more imprecise assignment and therefore also be less performant at runtime, although the fact that assignment is fast is a benefit in some cases.
+It is a simple and efficient approach that performs a linear pass over IR to produce a register assignment significantly faster than all of the steps involved with graph coloring.
+That said, it may be generate more imprecise assignments and therefore also be less performant at runtime, so the utility of such an approach depends on context.
+As JIT compilation 
+%Whether or not to  a cost depends on the context, as JIT compilation will often 
+%reduced compile-time in  the fact that assignment is fast is a benefit in some cases.
 
 The primary text is \textit{Linear Scan Register Allocation} \cite{linear}, the execution of which also relies on prior liveness analysis.
 
