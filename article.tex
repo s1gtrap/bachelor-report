@@ -133,7 +133,7 @@ cbox/.style={draw,
 \tikzset{invisible/.style={minimum width=0mm,inner sep=0mm,outer sep=0mm}}
 
 \font\myfont=cmr12 at 24pt
-\title{\myfont Implementation and evaluation of register allocation used to translate LLVM-{}- to x86-64}
+\title{\myfont Implementation and evaluation of register allocation for translating LLVM-{}- to x86-64}
 \author{William Welle Tange, 201809080}
 
 \pagenumbering{roman}
@@ -633,7 +633,7 @@ let dataflow (insns : Cfg.insn list) (ids : Cfg.G.V.t array) (g : Cfg.G.t) =
 \caption{Overall implementation of \texttt{dataflow}\label{fig:dataflow}}
 \end{figure}
 \noindent One particularly noteworthy thing is reversing of the flattened list of instructions on line 2 of Figure \ref{fig:dataflow}. After enumerating each entry so that the corresponding vertex can be looked up in the \texttt{ids} array, it is reversed.
-The motivation for this is the fact that the \(\mathit{out}[n]\) of node \(n\) depends on \(\mathit{in}[s]\) for all successors \(s\). Since most nodes have one successor immediately after, populating this before hands is significantly more efficient.
+The motivation for this is the fact that the \(\mathit{out}[n]\) of node \(n\) depends on \(\mathit{in}[s]\) for all successors \(s\). Since most nodes have one successor immediately after, populating this beforehands is significantly more efficient.
 
 Consider a simple program like Figure \ref{fig:countc} that only prints integers incrementally up until \texttt{argc}, in LLVM-{}-  that would consist of one loop with one phi node as seen in Figure \ref{fig:count1ll}. The number of iterations is nearly halfed when reverseing the list of instructions prior to dataflow as can be seen on \ref{tab:countll-rev-steps} when compared to \ref{tab:countll-steps}.
 
@@ -678,6 +678,7 @@ define i32 @main (i32 %0, i8* %1) {
 
 %\begin{NiceTabular}{|W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|}
 
+% FIXME: forklarer tabellerne nedenunder
 
 \begin{table}[H]
 \makebox[\textwidth][c]{
@@ -956,7 +957,7 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
   \end{minipage}%
 \end{figure}
 
-\noindent After spilling \texttt{\%c2}, the process is repeated. First by pushing \texttt{\%cn} (Figure \ref{fig:countdown.dot5} and \ref{fig:countdown.stack5}), then \texttt{\%argv} (Figure \ref{fig:countdown.dot6} and \ref{fig:countdown.stack6}) and finally \texttt{\%argc} (Figure \ref{fig:countdown.dot7} and \ref{fig:countdown.stack7}). One thing of note is the fact that the order in which this is happening is irrelevant, so long as variables pushed are of insignificant degree. For instance, \texttt{\%argc} was of degree 3 in Figure \ref{fig:countdown.dot4}, but as more and more of its neighbors are pushed it's degree decreases to a point where only \texttt{\%argc} and \texttt{\%c1} are yet to be pushed to the stack.
+\noindent After spilling \texttt{\%c2}, the process is repeated. First by pushing \texttt{\%cn} (Figure \ref{fig:countdown.dot5} and \ref{fig:countdown.stack5}), then \texttt{\%argv} (Figure \ref{fig:countdown.dot6} and \ref{fig:countdown.stack6}) and finally \texttt{\%argc} (Figure \ref{fig:countdown.dot7} and \ref{fig:countdown.stack7}). One thing of note is the fact that the order in which this is happening is irrelevant, so long as variables pushed are of insignificant degree. For instance, \texttt{\%argc} was of degree 3 in Figure \ref{fig:countdown.dot4}, but as more and more of its neighbors are pushed its degree decreases to a point where only \texttt{\%argc} and \texttt{\%c1} are yet to be pushed to the stack.
 
 
 \begin{figure}[H]
@@ -1008,7 +1009,7 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
   \end{minipage}%
 \end{figure}
 
-\noindent As the last variable \texttt{\%c1} is pushed in Figure \ref{fig:countdown8} and an empty graph remains, the process of reconstructing the graph can begin. When popping \texttt{\%c1} in Figure \ref{fig:countdown9}, it can be assigned any of the two colors as it has no neigbors adjacent, so either is chosen. On the other hand, when assigning \texttt{\%argc}, it's only adjacent naighbor \texttt{\%c1} is already assigned red so only blue remains. Likewise, for \texttt{\%argv} and \texttt{\%cn} their only immediately adjacent neighbor of \texttt{\%argc} causes them to be assigned red as can be seen on Figure \ref{fig:countdown11} and \ref{fig:countdown12}.
+\noindent As the last variable \texttt{\%c1} is pushed in Figure \ref{fig:countdown8} and an empty graph remains, the process of reconstructing the graph can begin. When popping \texttt{\%c1} in Figure \ref{fig:countdown9}, it can be assigned any of the two colors as it has no neigbors adjacent, so either is chosen. On the other hand, when assigning \texttt{\%argc}, it's only adjacent neighbor \texttt{\%c1} is already assigned red so only blue remains. Likewise, for \texttt{\%argv} and \texttt{\%cn} their only immediately adjacent neighbor of \texttt{\%argc} causes them to be assigned red as can be seen on Figure \ref{fig:countdown11} and \ref{fig:countdown12}.
 
 \begin{figure}[H]
   \centering
@@ -1066,12 +1067,14 @@ Variables that may be coalesced can be thought of as having a different sort of 
 
 When applied to the previous example (Figure \ref{fig:countdown.ll}), only \texttt{\%argc} and \texttt{\%c2} may be coalesced with \texttt{\%c1} as this is the only mov instruction. 
 
+Consider the above example but with k geq 2, the \%c1 and 
+
 \begin{figure}[H]
      \centering
    \begin{minipage}[b]{0.42\textwidth}
      \centering
      \includesvg[height=10em]{countdown.briggs}
-     \caption{\texttt{dune exec build -{}- -t dot}}\label{fig:countdown.dot}
+     \caption{\texttt{dune exec build -{}- -t dot}}\label{fig:countdown.briggs.dot}
    \end{minipage}
 \end{figure}
 
