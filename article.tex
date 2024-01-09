@@ -1083,9 +1083,9 @@ But for some \(k \geq 2\), now there are fewer than \(k\) significant neighbors 
      \includesvg[height=10.9em]{countdown.briggs2}
      \caption{\texttt{build -{}- -t dot -a briggs -n 2}}\label{fig:countdown.briggs.dot2}
    \end{minipage}
-   \begin{minipage}[b]{0.32\linewidth}
+   \begin{minipage}[b]{0.33\linewidth}
      \centering
-     \includesvg[height=9em]{countdown.briggs}
+     \includesvg[height=8.em]{countdown.briggs}
      \caption{\texttt{-a briggs -n 3}}\label{fig:countdown.briggs.dot}
    \end{minipage}
 \end{figure}
@@ -1107,7 +1107,109 @@ Therefore linear scan is an approach to register allocation that may be used to 
 %reduced compile-time in  the fact that assignment is fast is a benefit in some cases.
 
 The primary text is \textit{Linear Scan Register Allocation} \cite{linear}, the application of which also relies on prior liveness analysis. Given liveranges, assignments are easily derived from only one pass through IR.
-Similar to graph coloring, given \(K\) available GPRs, it must assign  as many variables as possible to these, and spill the remaining.
+Similar to graph coloring, given \(k\) available GPRs, it assigns  as many variables as possible, and spilling the rest.
+
+It does this by first building the intervals using the \(\mathit{in}[s]\) and \(\mathit{out}[s]\) resulting from prior dataflow analysis. This can be done in a single pass with a little creative array indexing as can be seen in Figure \ref{fig:intervals-ocaml}.
+
+
+\begin{figure}[H]
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let intervals insns (in_, out) =
+  let insn (starts, t, active) (i, n) =
+    let init s (added, t, active) = (* .. *) in
+    let end_ s (added, t, active) = (* .. *) in
+    let a, t, c =
+      init in_.(i) (S.SS.empty, t, active) |> init out.(i) |> end_ out.(i)
+    in
+    ((i, n, a) :: starts, t, c)
+  in
+  let starts, _, active =
+    List.fold_left insn
+      ([], S.ST.empty, Array.init (List.length insns) (Fun.const S.SS.empty))
+      insns
+  in
+  List.rev starts |> List.map (fun (i, n, a) -> (i, n, a, active.(i)))
+     \end{minted}
+     \caption{Implementation of \texttt{intervals} in \texttt{linear.ml}}\label{fig:intervals-ocaml}
+\end{figure}
+
+\noindent The array indexing is used in the inner functions of \texttt{init} and \texttt{end\_} to unset the last point at which an interval goes out of scope.
+
+\begin{figure}[H]
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let init s (added, t, active) =
+  ( S.SS.filter (fun s -> not (S.ST.mem s t)) s |> S.SS.union added,
+    S.SS.fold
+      (fun s t ->
+        S.ST.update s
+          (function
+            | Some j ->
+                active.(i) <- S.SS.add s active.(i);
+                active.(j) <- S.SS.remove s active.(j);
+                Some i
+            | None ->
+                active.(i) <- S.SS.add s active.(i);
+                Some i)
+          t)
+      s t,
+    active )
+     \end{minted}
+     \caption{Implementation of \texttt{init} in \texttt{linear.ml}}\label{fig:init-ocaml}
+\end{figure}
+
+\begin{figure}[H]
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let end_ s (added, t, active) =
+  ( S.SS.filter (fun s -> not (S.ST.mem s t)) s |> S.SS.union added,
+    S.SS.fold
+      (fun s t ->
+        S.ST.update s
+          (function
+            | Some j ->
+                active.(i) <- S.SS.add s active.(i);
+                active.(j) <- S.SS.remove s active.(j);
+                Some i
+            | None -> Some i)
+          t)
+      s t,
+    active )
+     \end{minted}
+     \caption{Implementation of \texttt{end\_} in \texttt{linear.ml}}\label{fig:end_-ocaml}
+\end{figure}
+
+
+
+\begin{figure}[H]
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let linearscan k insns =
+  let avail = Regs.of_list (List.init k reg_of_int) in
+  let insn (avail, active, assign) (_, _n, s, _e) =
+    (*Printf.printf "%s\n" (Cfg.string_of_insn n);*)
+    let start s (avail, active, assign) =
+      match Regs.choose_opt avail with
+      | Some reg -> (Regs.remove reg avail, S.ST.add s reg active, assign)
+      | None ->
+          (* FIXME: order by remaining or total length *)
+          let z, reg = S.ST.choose active in
+          ( avail,
+            S.ST.remove z active |> S.ST.add s reg,
+            S.ST.add z
+              (Ind3 (Lit (Int64.of_int ((S.ST.cardinal assign * -8) - 8)), Rbp))
+              assign )
+    in
+    S.SS.fold start s (avail, active, assign)
+  in
+  let _, active, assign =
+    List.fold_left insn (avail, S.ST.empty, S.ST.empty) insns
+  in
+  S.ST.fold (fun k v acc -> S.ST.add k (Reg v) acc) active assign
+     \end{minted}
+     \caption{Implementation of \texttt{linearscan} in \texttt{linear.ml}}\label{fig:linearscan-ocaml}
+\end{figure}
 
 
 % TODO: find ud af hvad binpacking er
