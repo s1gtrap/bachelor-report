@@ -635,7 +635,7 @@ let dataflow (insns : Cfg.insn list) (ids : Cfg.G.V.t array) (g : Cfg.G.t) =
 \noindent One particularly noteworthy thing is reversing of the flattened list of instructions on line 2 of Figure \ref{fig:dataflow}. After enumerating each entry so that the corresponding vertex can be looked up in the \texttt{ids} array, it is reversed.
 The motivation for this is the fact that the \(\mathit{out}[n]\) of node \(n\) depends on \(\mathit{in}[s]\) for all successors \(s\). Since most nodes have one successor immediately after, populating this beforehands is significantly more efficient.
 
-Consider a simple program like Figure \ref{fig:countc} that only prints integers incrementally up until \texttt{argc}, in LLVM-{}-  that would consist of one loop with one phi node as seen in Figure \ref{fig:count1ll}. The number of iterations is nearly halfed when reverseing the list of instructions prior to dataflow as can be seen on \ref{tab:countll-rev-steps} when compared to \ref{tab:countll-steps}.
+Consider a simple program like Figure \ref{fig:countc} that only prints integers incrementally up until \texttt{argc}, in LLVM-{}-  that would consist of one loop with one phi node as seen in Figure \ref{fig:count1ll}. 
 
 \begin{figure}[H]
   \begin{minipage}[b]{0.48\textwidth}
@@ -674,6 +674,8 @@ define i32 @main (i32 %0, i8* %1) {
    \end{minipage}
 \end{figure}
 
+\noindent If one were to note the \(\mathit{in}[s]\) and \(\mathit{out}[s]\) sets for each instruction \(s\) for each iteration one would arrive at the two tables seen in Table \ref{tab:countll-rev-steps} and \ref{tab:countll-steps}.
+The number of iterations is nearly halfed when reverseing the list of instructions prior to dataflow as can be seen on \ref{tab:countll-rev-steps} when compared to \ref{tab:countll-steps}.
 
 
 %\begin{NiceTabular}{|W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|}
