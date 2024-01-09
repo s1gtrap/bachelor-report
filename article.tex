@@ -1078,6 +1078,8 @@ Consider the above example but with some \(k \geq 2\). the \%c1 and
    \end{minipage}
 \end{figure}
 
+The purpose is only to assign the same registers to different variables. You don't need to note down information about blocks etc.
+
 %Strictly speaking, one could optimize many more mov instructions away if 
 
 
@@ -1086,12 +1088,14 @@ Consider the above example but with some \(k \geq 2\). the \%c1 and
 \section{Linear Scan}
 Another approach that also depends on liveness analysis is the linear scan algorithm.
 It is a simple and efficient approach that performs a linear pass over IR to produce a register assignment significantly faster than all of the steps involved with graph coloring.
-That said, it may be generate more imprecise assignments and therefore also be less performant at runtime, so the utility of such an approach depends on context.
-As JIT compilation 
+That said, it may generate more imprecise assignments and therefore also be less performant at runtime, so the utility of such an approach depends on context.
+Some compilers typically compile code into machine code ahead of time (AOT) while others depend on just-in-time (JIT) compilation which defers the compilation of code until runtime.
+Therefore linear scan is an approach to register allocation that may be used to achieve reasonably performant runtime compilation.
 %Whether or not to  a cost depends on the context, as JIT compilation will often 
 %reduced compile-time in  the fact that assignment is fast is a benefit in some cases.
 
-The primary text is \textit{Linear Scan Register Allocation} \cite{linear}, the execution of which also relies on prior liveness analysis.
+The primary text is \textit{Linear Scan Register Allocation} \cite{linear}, the application of which also relies on prior liveness analysis. Given liveranges, assignments are easily derived from only one pass through IR.
+Similar to graph coloring, given \(K\) available GPRs, it must assign  as many variables as possible to these, and spill the remaining.
 
 
 % TODO: find ud af hvad binpacking er
