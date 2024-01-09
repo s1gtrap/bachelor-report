@@ -1,17 +1,14 @@
 graph G {
-  "{ %argc }";
-  "{ %argv }";
-  "{ %cn }";
-  "{ %c1, %c2 }";
+  "{ argc }";
+  "{ argv }";
+  "{ c1, c2 }";
+  "{ cn }";
 
 
-  "{ %argv }" -- "{ %argc }";
-  {rank=same;"{ %argc }" -- "{ %cn }"}
-  "{ %c1, %c2 }" -- "{ %argc }";
-  "{ %c1, %c2 }" -- "{ %cn }";
+  {rank=same;"{ argv }" -- "{ argc }"};
+  "{ c1, c2 }" -- "{ argc }";
+  "{ cn }" -- "{ argc }";
+  {rank=same;"{ cn }" -- "{ c1, c2 }"};
+  "{ cn }" -- "{ argv }"[style=invis];
 
-  edge [style=invis]
-  {rank=same;"{ %argv }" -- "{ %c1, %c2 }"}
-  
-
-}
+  }

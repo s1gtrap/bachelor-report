@@ -1058,27 +1058,37 @@ and the spilled variable \texttt{\%c2}
 \subsection{Coalescing}
 
 
-Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes.  This is similar to but  not the same as  the lack of interference edges between variables that are subject to move operations. This is because variables \(a\) and \(b\) may still be assigned different registers or even spilled if,  for instance, either of them are of significant degree. Coalescing joins nodes \(a\) and \(b\) to node \(ab\) preserving the edges of both to maintain soundness.
+Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes.  This is similar to but  not the same as  the lack of interference edges between variables that are subject to move operations. This is because variables \(a\) and \(b\) may still be assigned different registers or even spilled if,  for instance, either of them are of significant degree.
 
-Since all edges are preserved, the resulting node \(ab\) may be of a much higher degree. Because of this, only strategies that produce a \(k\)-colorable graph are worth considering, as additional spills negate the purpose entirely. One of the  strategies introduced in the Appel text is the \textit{Briggs} strategy  \cite[232]{tiger}, in which nodes \(a\) and \(b\) can be coalesced if and only if the resulting node \(ab\) is of insignificant degree  (i.e. \(\leq K\)).
+Coalescing joins nodes \(a\) and \(b\) to node \(ab\) preserving the edges of both to maintain soundness.
+Since all edges are preserved, the resulting node \(ab\) may be of a much higher degree. Because of this, only strategies that produce a \(k\)-colorable graph are worth considering, as additional spills negate the purpose entirely. One of the  strategies introduced in the Appel text is the \textit{Briggs} strategy  \cite[232]{tiger}, in which nodes \(a\) and \(b\) can be coalesced if and only if the resulting node \(ab\) has \(\leq K\) nieghbors of significant degree  (i.e. \(\geq K\)).
 
 Since the only move operations in use in LLVM-{}- are phi nodes, only variables that are subject to this sort of operation are eligible to be coalesced in this form. 
-Variables that may be coalesced can be thought of as having a different sort of edge, quite the opposite of interference edges, in fact they can be thought of as a sort of 'preference edge'.
+Variables that can be coalesced can be thought of as having a preference edge, and any nodes with such an edge stand to benefit from coalescing, but this may only be done if they are not in interference.
+%different sort of edge, quite the opposite of interference edges, in fact they can be thought of as a sort of 'preference edge'.
 
-When applied to the previous example (Figure \ref{fig:countdown.ll}), only \texttt{\%argc} and \texttt{\%c2} may be coalesced with \texttt{\%c1} as this is the only mov instruction. 
+%When applied to the previous example , only \texttt{\%argc} and \texttt{\%c2} may be coalesced with \texttt{\%c1} as this is the only mov instruction. 
 
-Consider the above example but with some \(k \geq 2\). the \%c1 and 
+Consider the previous example (Figure \ref{fig:countdown.ll}): when applied with the same \(k=2\) nothing happens regardless of which allocator is used (see Figure \ref{fig:countdown.briggs.dot2} which was generated using the \texttt{briggs} allocator). This is because although the \texttt{\%c1} and \texttt{\%c2} nodes are not in interference, both neighbors of \texttt{\%c2} are of significant degree (\(\mathit{deg}(\texttt{\%cn}) = 2 \geq 2\) and \(\mathit{deg}(\texttt{\%argc}) = 3 \geq 2\)). 
+There fore it doesn't satisfy the Briggs criteria, and are not coalesced, resulting in the same interference graph as the \texttt{simple} allocator in Figure \ref{fig:countdown.dot}.
+But for some \(k \geq 2\), now there are fewer than \(k\) significant neighbors of \texttt{\%c2} (and \texttt{\%c1}), meaning the two can be coalesced, with the resulting node \texttt{\%c1, \%c2} having two neighbors of insignificant degree.
+
 
 \begin{figure}[H]
      \centering
-   \begin{minipage}[b]{0.42\textwidth}
+   \begin{minipage}[b]{0.50\linewidth}
      \centering
-     \includesvg[height=10em]{countdown.briggs}
-     \caption{\texttt{dune exec build -{}- -t dot}}\label{fig:countdown.briggs.dot}
+     \includesvg[height=10.9em]{countdown.briggs2}
+     \caption{\texttt{build -{}- -t dot -a briggs -n 2}}\label{fig:countdown.briggs.dot2}
+   \end{minipage}
+   \begin{minipage}[b]{0.32\linewidth}
+     \centering
+     \includesvg[height=9em]{countdown.briggs}
+     \caption{\texttt{-a briggs -n 3}}\label{fig:countdown.briggs.dot}
    \end{minipage}
 \end{figure}
 
-The purpose is only to assign the same registers to different variables. You don't need to note down information about blocks etc.
+\noindent The purpose is only to assign the same registers to different variables. You don't need to note down information about blocks etc.
 
 %Strictly speaking, one could optimize many more mov instructions away if 
 
