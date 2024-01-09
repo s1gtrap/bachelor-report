@@ -1256,7 +1256,42 @@ The \mintinline{llvm}{call} operation is by far the most complicated one. Mostly
 The \texttt{\%rax} register is zeroed before 
 
 \subsubsection{Implementing \mintinline{llvm}{gep} instructions}\label{impl-gep}
-GEP instructions are used to perform address calculations for accessing elements in  structures or arrays. GEP instructions are particularly useful for efficiently addressing elements in complex data structures.
+GEP instructions are used to perform address calculations for accessing elements in  structures or arrays. They are particularly useful for efficiently addressing elements in complex data structures. For example, code accessing fields like line 8 in Figure \ref{fig:vector.c}, would  translate to the snippet seen in Figure \ref{fig:vector.ll}.
+
+\begin{figure}[H]
+   \begin{minipage}{0.48\textwidth}
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{c}
+typedef struct {
+  int x;
+  int y;
+} vector;
+
+void dot(vector *a, vector *b) {
+  a->x += b->x;
+  a->y += b->y;     // -------->
+}
+
+     \end{minted}
+     \caption{Subfield access}\label{fig:vector.c}
+   \end{minipage}
+   \begin{minipage}{0.48\textwidth}
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{llvm}
+; ...
+%6 = getelementptr %struct.vector,
+            %i8* %1, i64 0, i32 1
+%7 = load i32, i32* %6
+%8 = getelementptr %struct.vector,
+            %i8* %0, i64 0, i32 1
+%9 = load i32, i32* %8
+%10 = add i32 %9, %7
+store i32 %10, i32* %8
+; ...
+     \end{minted}
+     \caption{\texttt{clang -O1 -S -emit-llvm}}\label{fig:vector.ll}
+   \end{minipage}
+\end{figure}
 
 \subsubsection{Implementing \mintinline{llvm}{phi} instructions}\label{impl-phi}
 Another irregular instruction is the \mintinline{llvm}{phi} instruction representing the \(\Phi\)-functions. Their  intended purpose is to copy data from whichever predecessor node was executed.
