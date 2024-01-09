@@ -1192,37 +1192,73 @@ The branching for most of these is trivial: after successful execution the flow 
 %%%
 \subsection{Translating LLVM-{}- to x86}
 
-Translating each IR instruction to x86 correctly is a matter of eliminating unintended side-effects. Each LLVM-{}- instruction is defined to have only one purpose, %% FIXME is purpose the right word?
+Translating each IR instruction to x86 correctly is a matter of eliminating unintended side-effects. Each LLVM-{}- instruction generally only serves one specific function, %% FIXME is purpose the right word?
 as concepts such as calling conventions, stack frames, or a \lstinline!FLAGS! register are completely abstracted over in order to remain platform independent.
 
-In contrast, the x86 \textit{instruction set architecture} (ISA) is targeting a  \textit{complex instruction set computer} (CISC) family of processors, the instructions of which perform a much broader set of operations \cite[p.~190]{tiger}. This is is in part due to pipelining, i.e. an abstraction over the concrete implementation of the actual processor, which in turn is made for the sake of performance.
+In contrast, the x86 \textit{instruction set architecture} (ISA) is targeting a  \textit{complex instruction set computer} (CISC) family of processors, the instructions of which perform a much broader set of operations \cite[p.~190]{tiger}. This is in part due to pipelining, i.e. an abstraction over the concrete implementation of the actual processor, which in turn is made for the sake of performance.
 
-An example of this would be the division/remainder operation: since integer division is a non-trivial iterative process wherein both the quotient and remainder is needed throughout, the result of both of these is stored in the \lstinline!%rax! and \lstinline!%rdx! registers respectively. This means two operations are performed simultaneously regardless of which value is used, hence they need to be restored before executing the next instruction, as any variables assigned to \lstinline!%rax! or \lstinline!%rdx! will be overwritten.
+But another more concise example of this would be the division/remainder operation: since integer division is a non-trivial iterative process wherein both the quotient and remainder is needed throughout, the result of both of these is stored in the \texttt{\%rax} and \texttt{\%rdx} registers respectively. This means two operations are performed simultaneously regardless of which value is used, hence they need to be restored before executing the next instruction, as any variables assigned to \lstinline!%rax! or \lstinline!%rdx! will be overwritten.
 
-\begin{center}
-\begin{tabular}{|c||c|c|c|c|} 
+To generally map each LLVM-{}- instruction to what amounts to the 'core' function in x86, consider Table \ref{tab:trans}.
+
+\begin{table}[H]
+  \centering
+\begin{tabular}{|>{\tt}l|>{\tt}l|l|} 
  \hline
- add & addx & \{\}\\
+ LLVM-{}- & x86 & Registers affected\\
  \hline
- mul & imul & \{ \%rax \} \\
- \hline
- sdiv & idivx & \{\%rax, \%rdx\} \\
- \hline
- srem & idivx & \{\%rax, \%rdx \\
- \hline
-   call & callx & \{\%rax, \textit{caller saved registers}\} \\
- \hline
+add      & addx \%src, \%dst & \{\}\\
+alloca   & subq\ \ \_\_\_, \%rsp & \{\texttt{\%rsp}\}\\
+allocan  & subq\ \ \_\_\_, \%dst & \{\texttt{\%rsp}\}\\
+and      & andx \%src, \%dst & \{\}\\
+ashr     & sarx \%src, \%dst & \{\}\\
+bitcast  & movx \%src, \%dst & \{\}\\
+call     & \textrm{\textit{see \ref{impl-call}}} & \{\texttt{\%rax}, \texttt{\%rcx}, \texttt{\%rdx}, \texttt{\%rsi}, \texttt{\%r8-\%r11}\}\\
+gep      & \textrm{\textit{see \ref{impl-gep}}} & \{\}\\
+icmp     & cmpx \%src, \%dst & \{\texttt{\%rFLAGS}\}\\
+load     & movx (\%src), \%dst & \{\}\\
+lshr     & shrx \%src, \%dst & \{\}\\
+mul      & imulx \%src, \%dst & \{\texttt{\%rax}\}\\
+or       & orx \%src, \%dst & \{\}\\
+phi      & \textrm{\textit{see \ref{impl-phi}}} & \{\}\\
+ptrtoint & movx \%src, \%dst & \{\}\\
+sdiv     & idivx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
+select   &  & \{\}\\
+sext     & movx \%src, \%dst & \{\}\\
+shl      & shl \%src, \%dst & \{\}\\
+srem     & idivx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
+store    & movx \%src, (\%dst) & \{\}\\
+sub      & subx \%src, \%dst & \{\}\\
+trunc    & movx \%src, \%dst & \{\}\\
+udiv     & divx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
+urem     & divx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
+xor      & xorx \%src, \%dst & \{\}\\
+zext     & movx \%src, \%dst & \{\}\\
  \hline
 \end{tabular}
-\end{center}
+\caption{LLVM-{}- to x86 translation table}\label{tab:trans}
+\end{table}
+
+ %add & addx & \{\}\\
+ %\hline
+ %mul & imul & \{ \%rax \} \\
+ %\hline
+ %sdiv & idivx & \{\%rax, \%rdx\} \\
+ %\hline
+ %srem & idivx & \{\%rax, \%rdx \\
+ %\hline
+   %call & callx & \{\%rax, \textit{caller saved registers}\} \\
 
 
-\subsubsection{Implementing \mintinline{llvm}{call} instructions}
+\subsubsection{Implementing \mintinline{llvm}{call} instructions} \label{impl-call}
 
 The \mintinline{llvm}{call} operation is by far the most complicated one. Mostly because of calling conventions,
-The \mintinline{gas}{%rax} register is zeroed before 
+The \texttt{\%rax} register is zeroed before 
 
-\subsubsection{Implementing \mintinline{llvm}{phi} instructions}
+\subsubsection{Implementing \mintinline{llvm}{gep} instructions}\label{impl-gep}
+GEP instructions are used to perform address calculations for accessing elements in  structures or arrays. GEP instructions are particularly useful for efficiently addressing elements in complex data structures.
+
+\subsubsection{Implementing \mintinline{llvm}{phi} instructions}\label{impl-phi}
 Another irregular instruction is the \mintinline{llvm}{phi} instruction representing the \(\Phi\)-functions. Their  intended purpose is to copy data from whichever predecessor node was executed.
 %, so intuitively, additional branching must be incurred to select the correct value to merge, but this isn't the case. Rather, 
 As opposed to the other instructions that are only concerned with transferring the current state to another, this operation needs to concern itself with what was executed immediately prior.
