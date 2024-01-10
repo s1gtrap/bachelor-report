@@ -1112,6 +1112,7 @@ Similar to graph coloring, given \(k\) available GPRs, it assigns  as many varia
 It does this by first building the intervals using the \(\mathit{in}[s]\) and \(\mathit{out}[s]\) resulting from prior dataflow analysis. This can be done in a single pass with a little creative array indexing as can be seen in Figure \ref{fig:intervals-ocaml}.
 
 
+
 \begin{figure}[H]
      \centering
      \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
@@ -1567,9 +1568,9 @@ arg(s) & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 1
 \caption{\label{tab:dumb-fib}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
 \end{table}
 
-The measures in \ref{tab:dumb-fib}  are significantly equivalent to one another, with all allocators (except greedy 0) seeming to converge towards being 37\% slower than Clang. This isn't particularly surprising, as the x86 translation is more concerned with preserving callee saved registers than necessary in pushing each and every one despite not being in use. Also, instead of pushing with the \lstinline!push! instruction it would be faster to simply subtract from the \lstinline!%rsp! register directly and using \lstinline!mov! directly.
+\noindent The measures in Table \ref{tab:dumb-fib}  are significantly equivalent to one another, with all allocators (except greedy 0) seeming to converge towards being 37\% slower than Clang. This isn't particularly surprising, as the x86 translation is more concerned with preserving callee saved registers than necessary in pushing each and every one despite not being in use. Also, instead of pushing with the \lstinline!push! instruction it would be faster to simply subtract from the \lstinline!%rsp! register directly and using \lstinline!mov! directly.
 
-What's more interesting and related to the allocation is the fact that greedy 0 is more than twice as slow. This is presumably because the \lstinline!fib! function that has 7 variables can assign each of them to a register for the first six allocators listed. However, the last one (greedy 0), has no assignable registers, so it must necessarily start spilling from the very beginning. To elucidate this hypothesis, here is the same benchmark but only for the greedy of decreasing \(k\) assignable registers:
+What's more interesting and related to the allocation is the fact that greedy 0 is more than twice as slow. This is presumably because the \lstinline!fib! function that has 7 variables can assign each of them to a register for the first six allocators listed. However, the last one (greedy 0), has no assignable registers, so it must necessarily start spilling from the very beginning. To elucidate this hypothesis, the same benchmark was performed but only for the greedy of decreasing \(k\) assignable registers as well as the Tiger compiler which has the same approach to spilling every variable prematurely  and can be seen in Table \ref{tab:dumb-fib-greedy}:
 \begin{table}[H]
 \makebox[\textwidth][c]{
 \begin{NiceTabular}{|c|ccccccccc|}
@@ -1592,8 +1593,10 @@ arg(s) & clang & greedy 12 & greedy 8 & greedy 6 & greedy 4 & greedy 2 & greedy 
 \hline
 \end{NiceTabular}}
 \caption{\label{tab:dumb-fib-greedy}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
-
 \end{table}
+
+\noindent While it's not a complete 1:1 in terms of runtime as the Tiger compiler seems to perform slightly better than Greedy 0 (by \textasciitilde 30\% or so), that does make sense as there are marginally more instructions involved with each operation, not to mention the extra care taken to ensure calling conventions are upheld.
+
 
 \subsubsection{\lstinline!benches/ackermann.ll!}
 
@@ -1718,6 +1721,7 @@ arg & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 &
 
 
 
+% TODO: comment that this is basically writing an llvm backend, except redoing all the register allocation stuff.
 
 
 
