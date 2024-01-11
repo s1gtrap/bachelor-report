@@ -1176,24 +1176,21 @@ let intervalstart insns (in_, out) =
    \begin{minipage}[b]{0.95\textwidth}
      \centering
      \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
-let intervalends insns starts (in_, out) =
-  let insn (i, _n) (ordstarts, lengths, ends, active) =
+let intervalends insns (in_, out) =
+  let insn (i, _n) (ordends, ends, active) =
     let in' = S.SS.diff (S.SS.union in_.(i) out.(i)) active in
-    ( S.SS.fold (fun e a -> IT.update i (add e) a) in' ordstarts,
-      S.SS.fold
-        (fun e a -> IT.update (-i + S.ST.find e starts) (add e) a)
-        in' lengths,
+    ( S.SS.fold (fun e a -> IT.update i (add e) a) in' ordends,
       S.SS.fold (fun e a -> S.ST.add e i a) in' ends,
       S.SS.union active in' )
   in
-  List.fold_right insn insns (IT.empty, IT.empty, S.ST.empty, S.SS.empty)
+  List.fold_right insn insns (IT.empty, S.ST.empty, S.SS.empty)
      \end{minted}
      \caption{Implementation of \texttt{intervalendsintervalstart} in \texttt{lib/linear.ml}}\label{fig:intervalends.ml}
    \end{minipage}
 \end{figure}
 
 
-\noindent The opposite is quite similar (see Figure \ref{fig:intervalends.ml}).
+\noindent The opposite is quite similar (see Figure \ref{fig:intervalends.ml}), with the only real difference being the use of \texttt{List.fold\_right} instead of \texttt{List.fold\_left} to reduce the function body in reverse.
 
 
 
