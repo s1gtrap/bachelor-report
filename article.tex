@@ -380,7 +380,7 @@ define i32 @mul (i32 %0, i32 %1) {
      \caption{Stripped \texttt{clang -O0 -S -emit-llvm}}\label{fig:mulll0}
    \end{minipage}
 \end{figure}
-\noindent Another approach is that of Figure \ref{fig:mulll1}, which uses so-called 'phi nodes' instead.  These are a type of instruction that evaluates to a specified operand depending on which predecessor block was executed immediately prior. This circumvents the need for the same level of interior mutability as is achieved by reading/writing to memory, without violating the properties of SSA. By copying a value from the end of a predecessor to the beginning of the current block.
+\noindent Another approach is that of Figure \ref{fig:mulll1}, which uses so-called 'phi nodes' instead.  These are a type of instruction that evaluates to a specified operand depending on which predecessor block was executed immediately prior. This circumvents the need for the same level of mutability as is achieved by reading/writing to memory, without violating the properties of SSA, by copying a value from the end of a predecessor to the beginning of the current block.
 A Phi node represents a point in the program where the control flow merges, and it selects the appropriate version of a variable based on the path taken. This ensures that the data flow is well-defined and allows for easy analysis across different control flow paths.
 
 
@@ -547,7 +547,7 @@ The transfer constraint is based on a \textit{transfer function} that describes 
 \end{align}
 with the \(\mathit{use}[n]\) set being defined as any variables that may be used and the \(\mathit{def}[n]\) as the set of variables defined in node \(n\). The \(\mathit{def}[n]\) either consists of one variable or equal to \(\emptyset\). The  \(\mathit{use}[n]\) set is effectively unbounded as some instructions take any \(m\) variables as parameters.
 
-Control-flow constraints on the other hand propagate the use of variables to previously executed instructions, expecting these to be defined somewhere further up the CFG. This is done by propagating the union of the \textit{live-in} set associated with all immediate successor nodes. This is also referred to as the \textit{meet operator}, whose operator depends on the type of dataflow analysis as well, but for liveness analysis a union is performed on the \textit{live-in} sets of  any successive  nodes:
+Control-flow constraints, on the other hand, propagate the use of variables to previously executed instructions, expecting these to be defined somewhere further up the CFG. This is done by propagating the union of the \textit{live-in} set associated with all immediate successor nodes. This is also referred to as the \textit{meet operator}, whose operator depends on the type of dataflow analysis as well, but for liveness analysis a union is performed on the \textit{live-in} sets of  any successive  nodes:
 \begin{align}\label{flowout}
   \mathit{out}\left[n\right] &= \bigcup_{s\in \mathit{succ}\left[n\right]} \mathit{in}\left[s\right]
 \end{align}
@@ -660,7 +660,7 @@ let dataflow (insns : Cfg.insn list) (ids : Cfg.G.V.t array) (g : Cfg.G.t) =
 \caption{Overall implementation of \texttt{dataflow}\label{fig:dataflow}}
 \end{figure}
 \noindent One particularly noteworthy thing is reversing of the flattened list of instructions on line 2 of Figure \ref{fig:dataflow}. After enumerating each entry so that the corresponding vertex can be looked up in the \texttt{ids} array, it is reversed.
-The motivation for this is the fact that the \(\mathit{out}[n]\) of node \(n\) depends on \(\mathit{in}[s]\) for all successors \(s\). Since most nodes have one successor immediately after, populating this beforehands is significantly more efficient.
+The motivation for this is the fact that the \(\mathit{out}[n]\) of node \(n\) depends on \(\mathit{in}[s]\) for all successors \(s\). Since most nodes only have one immediate successor, populating this first is significantly more efficient.
 
 Consider a simple program like Figure \ref{fig:countc} that only prints integers incrementally up until \texttt{argc}, in LLVM-{}-  that would consist of one loop with one phi node as seen in Figure \ref{fig:count1ll}. 
 
@@ -777,7 +777,7 @@ $ time dune exec build -- tests/sha256.ll -t lva
 The purpose of conducting dataflow analysis as above is finding variables that may be assigned the same register. This is done by building an interference graph, which is an undirected graph, whose nodes represent variables and edges that signify interference between them, i.e. variables \(a\) and \(b\) live at intersecting program points is represented with an edge \((a,b)\).
 
 
-Constructing an interference graph only depends on the \textit{live-out} set and type of instruction. If the instruction defines a variable, said variable is in interference with all variables in the \textit{live-out} set. There is one exception however: according to the Appel text, move instructions (i.e. phi nodes in the case of SSA form) are given special consideration. The purpose of phi nodes is to copy/move a certain value from a certain predecessor, so they are not necessarily in conflict for being live at the same time. Rather it would often benefit if they were assigned the same register to spare unnecessary moves. % TODO: uddyb hvorfor de ikke er i interference?
+The construction of an interference graph only depends on the \textit{live-out} set and type of instruction. If the instruction defines a variable, said variable is in interference with all variables in the \textit{live-out} set. There is one exception however: according to the Appel text, move instructions (i.e. phi nodes in the case of SSA form) are given special consideration. The purpose of phi nodes is to copy/move a certain value from a certain predecessor, so they are not necessarily in conflict for being live at the same time. Rather it would often benefit if they were assigned the same register to spare unnecessary moves. % TODO: uddyb hvorfor de ikke er i interference?
 
 
 Because of this, for any phi node of the form 
@@ -885,7 +885,7 @@ Graph coloring is a problem in graph theory where the goal is to assign colors t
 A graph that can be colored using \(k\) different colors is referred to as \(k\)-colorable and the minimum number of colors needed to be assigned is also called its' chromatic number.
 Although this problem is known to be NP-complete  \cites[229]{tiger}[510]{dragon}, the heuristic as introduced in
 both the Appel \cite[229]{tiger}, and Aho et al. \cites[557]{dragon} texts,
-is a linear time approximation to this problem is described below.
+is a linear time approximation to this problem as described below.
 
 \subsection{Coloring by simplification}
 
@@ -1622,7 +1622,7 @@ To achieve this, only a few changes need to be made to the codebase. A debug fla
 This includes a bitmask of GPRs that can possibly be changed (aside from the scratch registers of course) as well as which parts of the stack may be modified. % TODO: implement the stack checker
 In addition to this, each of the labels are output with a \lstinline!.globl! directive in the file header. A file is built with these extra symbols using the \lstinline!-d! flag.
 
-To validate that this works as intended, 
+%To validate that this works as intended, 
 
 
 %\section{Further Optimization}
