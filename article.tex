@@ -782,7 +782,7 @@ Constructing an interference graph only depends on the \textit{live-out} set and
 
 Because of this, for any phi node of the form 
 \begin{equation}
-  a = \Phi (b_1, ..., b_n) \label{phi}
+i a = \Phi (b_1, ..., b_n) \label{phi}
 \end{equation}
 add edges to all \textit{live-out} variables not in \(\{b_1, ..., b_n\}\)
 \[
@@ -1202,33 +1202,20 @@ as can be seen in Figure \ref{fig:intervals-ocaml}.
 \subsection{Heuristics spilling}
 \usetikzlibrary{chains,arrows}
 \begin{figure}[H]
-
-     \centering
-     \begin{minipage}[b]{0.30\textwidth}
-     \centering
-
-     \begin{tikzpicture}[scale=0.442,
-    node distance=0mm, text height=1.5ex, text depth=.25ex,
-    attribute/.style={rectangle,minimum size=8mm,very thin,draw=black!50,font=\ttfamily},
-    link/.style={thin, to path={-- ++(0,8mm) -| (\tikztotarget)}, >= triangle 45, shorten >= 0pt}]
-
-%\node (n1) [attribute] {\small NODE1};
-%\node (n2) [attribute, right=of n1] {\small NODE2};
-
-   \node at (7,0) (11) {};
-   \node at (7,1) (10) {};
-   \node at (7,2) (9) {};
-   \node at (7,3) (8) {};
-   \node at (7,4) (7) {};
-   \node at (7,5) (6) {};
-   \node at (7,6) (5) {};
-   \node at (7,7) (4) {};
-   \node at (7,8) (3) {};
-   \node at (7,9) (2) {};
-
-   \draw[|-|] (2)  node[above,transform canvas={xshift=1.43cm}] {\texttt{\%3}} edge [transform canvas={xshift=1.5cm}] (6);
-   \draw[|-|] (3) node[above,transform canvas={xshift=0.83cm}] {\texttt{\%4}} edge [transform canvas={xshift=0.9cm}] (8);
-   \draw[|-|] (4) node[above] {\texttt{\%5}} edge [ ]  (11);
+    \centering
+    \begin{minipage}[b]{0.31\textwidth}
+      \centering
+      \begin{tikzpicture}[scale=0.4]
+        \node[above] at (0,0) {\texttt{\%3}};
+        \node[above] at (1,-1) {\texttt{\%4}};
+        \node[above] at (2,-2) {\texttt{\%5}};
+        \node[above] at (3,-4) {\texttt{\%7}};
+        \node[above] at (4,-5) {\texttt{\%8}};
+        \draw[|-|] (0,0) edge   (0,-3);
+        \draw[|-|] (1,-1) edge   (1,-5);
+        \draw[|-|] (2,-2) edge   (2,-8);
+        \draw[|-|] (3,-4) edge   (3,-7);
+        \draw[|-|] (4,-5) edge   (4,-6);
 
 
    %\draw[help lines] (0,0) grid (3,11);
@@ -1248,8 +1235,8 @@ as can be seen in Figure \ref{fig:intervals-ocaml}.
 
 
 \end{tikzpicture}
-\vspace{0.7em}
-     \caption{Live ranges}\label{fig:linear.lra}
+\vspace{2.7em}
+     \caption{Live intervals}\label{fig:linear.lra}
    \end{minipage}
    \begin{minipage}[b]{0.68\textwidth}
      \centering
