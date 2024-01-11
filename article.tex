@@ -427,7 +427,7 @@ and while each node also has a set of predecessors associated, which consists of
 
 %hence a \textit{control flow graph} is derived from these. A terminator will branch elsewhere to continue execution. The destination of this has to be an annotated by a label, hence labels \textit{initiate} blocks.
 
-\subsection{Building a CFG}
+\subsection{Building a Control Flow Graph}
 
 %\subsection{Parameterized over individual instructions}
 
@@ -452,6 +452,33 @@ let flatten ((head, tail) : Ll.cfg) : insn list =
 \end{minted}
 
 \noindent This is done to simplify lookup of which graph vertex corresponds to the \(n\)th instruction/terminator. Labels, while present in the flattened list, aren't considered as they have no inherent function other than labelling the leader instruction to branch to.
+
+\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let graph ((head, tail) : Ll.cfg) : G.V.t array * G.t =
+  let insns = flatten (head, tail) |> List.mapi (fun i n -> (i, n)) in
+  let verts = Array.init (List.length insns) G.V.create in
+  let addbl t = function i, Label l -> S.ST.add l verts.(i + 1) t | _ -> t in
+  let blocks = List.fold_left addbl S.ST.empty insns in
+  let g = G.create () in
+  Array.iter (G.add_vertex g) verts;
+  let addterm i = function
+    | Ll.Ret _ | Unreachable -> ()
+    | Br lbl -> G.add_edge g verts.(i) (S.ST.find lbl blocks)
+    | Cbr (_, l1, l2) ->
+        G.add_edge g verts.(i) (S.ST.find l1 blocks);
+        G.add_edge g verts.(i) (S.ST.find l2 blocks)
+    | Switch (_, _, _, lbls) ->
+        let vert l = S.ST.find l blocks in
+        List.map snd lbls |> List.map vert |> List.iter (G.add_edge g verts.(i))
+  in
+  let addedges = function
+    | _, Label _ -> ()
+    | i, Insn _ -> G.add_edge g verts.(i) verts.(i + 1)
+    | i, Term term -> addterm i term
+  in
+  List.iter addedges insns;
+  (verts, g)
+\end{minted}
 
 
 %* description of blocks, how they connect etc.
@@ -739,7 +766,7 @@ $ time dune exec build -- tests/sha256.ll  -t lva
 \end{minted}
 
 
-\subsection{Interference Graph}
+\subsection{Building an Interference Graph}
 
 The purpose of conducting dataflow analysis as above is finding variables that may be assigned the same register. This is done by building an interference graph, which is an undirected graph, whose nodes represent variables and edges that signify interference between them, i.e. variables \(a\) and \(b\) live at intersecting program points is represented with an edge \((a,b)\).
 
