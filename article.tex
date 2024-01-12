@@ -1447,7 +1447,7 @@ In contrast, the x86 \textit{instruction set architecture} (ISA) is targeting a 
 
 But another more concise example of this would be the division/remainder operation: since integer division is a non-trivial iterative process wherein both the quotient and remainder is needed throughout, the result of both of these is stored in the \texttt{\%rax} and \texttt{\%rdx} registers respectively. This means two operations are performed simultaneously regardless of which value is used, hence they need to be restored before executing the next instruction, as any variables assigned to \lstinline!%rax! or \lstinline!%rdx! will be overwritten.
 
-To generally map each LLVM-{}- instruction to what amounts to the 'core' function in x86, consider Table \ref{tab:trans}.
+To map each LLVM-{}- instruction to what amounts to the 'core' function in x86, consider Table \ref{tab:trans}. Instructions for which the size varies, the suffix is denoted with \texttt{x} instead. This is then replaced with the appropriate size suffix depending on the size denoted in the LLVM-{}- instruction. For example, most binary operations move the left-hand operand into \texttt{\%rax} and the right-hand operand into  \texttt{\%rcx}, after which the associated instruction from the table is performed. For x86, most operations are done in place, so for the most part \texttt{\%rax} is modified and moved to the destination after.
 
 \begin{table}[H]
   \centering
@@ -1456,8 +1456,8 @@ To generally map each LLVM-{}- instruction to what amounts to the 'core' functio
  LLVM-{}- & x86 & Registers affected\\
  \hline
 add      & addx \%src, \%dst & \{\}\\
-alloca   & subq\ \ \_\_\_, \%rsp & \{\texttt{\%rsp}\}\\
-allocan  & subq\ \ \_\_\_, \%dst & \{\texttt{\%rsp}\}\\
+alloca   & subq \$n, \%rsp & \{\texttt{\%rsp}\}\\
+allocan  & subq \$n, \%rsp & \{\texttt{\%rsp}\}\\
 and      & andx \%src, \%dst & \{\}\\
 ashr     & sarx \%src, \%dst & \{\}\\
 bitcast  & movx \%src, \%dst & \{\}\\
@@ -1484,26 +1484,55 @@ xor      & xorx \%src, \%dst & \{\}\\
 zext     & movx \%src, \%dst & \{\}\\
  \hline
 \end{tabular}
-\caption{LLVM-{}- to x86 translation table}\label{tab:trans}
+\caption{LLVM-{}- instruction to x86 translation table}\label{tab:trans}
 \end{table}
 
- %add & addx & \{\}\\
- %\hline
- %mul & imul & \{ \%rax \} \\
- %\hline
- %sdiv & idivx & \{\%rax, \%rdx\} \\
- %\hline
- %srem & idivx & \{\%rax, \%rdx \\
- %\hline
-   %call & callx & \{\%rax, \textit{caller saved registers}\} \\
+
+\begin{table}[H]
+  \centering
+\begin{tabular}{|>{\tt}l|>{\tt}l|l|} 
+ \hline
+ LLVM-{}- & x86 & Registers affected\\
+ \hline
+add      & addx \%src, \%dst & \{\}\\
+alloca   & subq \$n, \%rsp & \{\texttt{\%rsp}\}\\
+allocan  & subq \$n, \%rsp & \{\texttt{\%rsp}\}\\
+and      & andx \%src, \%dst & \{\}\\
+ashr     & sarx \%src, \%dst & \{\}\\
+bitcast  & movx \%src, \%dst & \{\}\\
+call     & \textrm{\textit{see \ref{impl-call}}} & \{\texttt{\%rax}, \texttt{\%rcx}, \texttt{\%rdx}, \texttt{\%rsi}, \texttt{\%r8-\%r11}\}\\
+gep      & \textrm{\textit{see \ref{impl-gep}}} & \{\}\\
+icmp     & cmpx \%src, \%dst & \{\texttt{\%rFLAGS}\}\\
+load     & movx (\%src), \%dst & \{\}\\
+lshr     & shrx \%src, \%dst & \{\}\\
+mul      & imulx \%src, \%dst & \{\texttt{\%rax}\}\\
+or       & orx \%src, \%dst & \{\}\\
+phi      & \textrm{\textit{see \ref{impl-phi}}} & \{\}\\
+ptrtoint & movx \%src, \%dst & \{\}\\
+sdiv     & idivx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
+select   &  & \{\}\\
+sext     & movx \%src, \%dst & \{\}\\
+shl      & shl \%src, \%dst & \{\}\\
+srem     & idivx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
+store    & movx \%src, (\%dst) & \{\}\\
+sub      & subx \%src, \%dst & \{\}\\
+trunc    & movx \%src, \%dst & \{\}\\
+udiv     & divx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
+urem     & divx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
+xor      & xorx \%src, \%dst & \{\}\\
+zext     & movx \%src, \%dst & \{\}\\
+ \hline
+\end{tabular}
+\caption{LLVM-{}- instruction to x86 translation table}\label{tab:trans}
+\end{table}
 
 
 \subsubsection{Implementing \mintinline{llvm}{call} instructions} \label{impl-call}
 
 The \mintinline{llvm}{call} operation is by far the most complicated one. Mostly because of calling conventions,
-The \texttt{\%rax} register is zeroed before 
+The \texttt{\%rax} register is zeroed before every call as its lowermost byte register \texttt{\%al} is used to indicate the number of variadic arguments \cite[25]{sysv}.
 
-\subsubsection{Implementing \mintinline{llvm}{gep} instructions}\label{impl-gep}
+\subsubsection{Implementing \mintinline{llvm}{getelementptr} instructions}\label{impl-gep}
 GEP instructions are used to perform address calculations for accessing elements in  structures or arrays. They are particularly useful for efficiently addressing elements in complex data structures. For example, code accessing fields like line 8 in Figure \ref{fig:vector.c}, would  translate to the snippet seen in Figure \ref{fig:vector.ll}.
 
 \begin{figure}[H]
