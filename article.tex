@@ -1194,7 +1194,7 @@ let intervalends insns (in_, out) =
 
 
 
-as can be seen in Figure \ref{fig:intervals-ocaml}.
+%as can be seen in Figure \ref{fig:intervals-ocaml}.
 
 \subsection{Heuristics spilling}
 \usetikzlibrary{chains,arrows}
@@ -1609,6 +1609,48 @@ All of the relevant translation can be seen in the fragment on Figure \ref{fig:s
 of transferring to \texttt{\_main\$9} if the zero flag indeed is set. If not, execution is continued in which case both \(\mathit{assign}[\texttt{\%6}]\) and \(\mathit{assign}[\texttt{\%7}]\) are moved into \(\mathit{assign}[\texttt{\%4}]\) and \(\mathit{assign}[\texttt{\%5}]\) respectively, in preperation for continuing execution at \texttt{\_main\$3}.
 
 As \texttt{mov} operations do not change the \texttt{FLAGS} register \cite{x86asm}, having \texttt{mov} instructions between the branching instructions of \texttt{je} and \texttt{jmp} do not affect the branching. Likewise, because of the \(\mathit{use}[n]\) semantics of \(\Phi\)-functions, all \(b_i\) are in interference in one another, so may not be overwritten by the \texttt{mov}s inserted.
+
+One particularly nasty oversight that was discovered a couple of days prior to handin stems from phi movs overwriting each other.
+Consider Figure \ref{fig:sqrt1.ll} where two phi instructions either move \texttt{\%6} to \texttt{label \%10} or \texttt{\%7} to \texttt{label \%5} depending on the condition. In some cases, even in greedy where each variable is assigned their own discrete register, their respective values are overwritten. This is due to \texttt{\%7} being moved to \texttt{\%6} prior to potentially branching back to \texttt{label \%5}. If phi moves are conducted unconditionally of branch condition \texttt{\%9}, the value of \texttt{\%6} prior to branching to \texttt{label \%10} is overwritten on the off-chance of returning to \texttt{label \%5}, causing the value assigned to \texttt{\%11} and returned on line 10 to always be equal to \texttt{\%7} instead of the intended \texttt{\%7} instead of the intended  \texttt{\%6}.
+
+
+\begin{figure}[H]
+   \begin{minipage}{0.58\textwidth}
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{llvm}
+ ; ...
+5:
+ %6 = phi i32 [%7, %5], [1, %3]
+ %7 = add i32 %6, 1
+ %8 = mul i32 %7, %7
+ %9 = icmp sgt i32 %8, %0
+ br i1 %9, label %10, label %5
+10:
+ %11 = phi i32 [%0, %1], [0, %3], [%6, %5]
+ ret i32 %11
+}
+     \end{minted}
+     \caption{\texttt{dune exec build -{}- -t x86}}\label{fig:sqrt1.ll}
+   \end{minipage}
+   \begin{minipage}{0.40\textwidth}
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{gas}
+# ...
+# br i1 %9, label %10, label %5
+movq	%r10, %rax
+cmpq	$0, %rax
+movq	%r8, %rax
+movq	%rax, %rdi
+je	_isqrt$5
+movq	%rdi, %rax
+movq	%rax, %r11
+jmp	_isqrt$10
+# ...
+     \end{minted}
+     \caption{TODO}\label{fig:sqrt1.s}
+   \end{minipage}
+\end{figure}
+This was resolved by relying on conditional movs immediately prior to branching conditionally. Specifically, the \texttt{cmoveq} instruction was used, which only moves the value if the equals flag (i.e. \texttt{ZF}) is set.
 
 % FIXME: check if above is sound
 
