@@ -1414,8 +1414,8 @@ let linearscan k insns =
 
 The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as, for instance, neither of the languages implemented support exception handling, floating point operations and so on, and instead only strive to cover the basics of compilers.
 
-The instructions included are
-\lstinline!trunc! has only been added in order to help cover more generated LLVM. % FIXME
+Some additional instructions are included, like \lstinline!trunc! and \lstinline!switch!, to widen the range of supported frontend languages with the clang compiler.
+%been added in order to help cover more generated LLVM. % FIXME
 %with only four distinct block terminators 
 %\begin{enumerate}
 %    \item Unconditional \lstinline!br! followed by the label to branch to
@@ -1423,19 +1423,19 @@ The instructions included are
 %    \item \lstinline!ret! followed by an optional return value
 %    \item \lstinline!unreachable!
 %\end{enumerate}
-The branching for most of these is trivial: after successful execution the flow of all but \lstinline!br!, \lstinline!ret! and \lstinline!unreachable! will unconditionally attempt to execute the next instruction in memory (i.e. increment the instruction pointer by instruction length).
+%The branching for most of these is trivial: after successful execution the flow of all but \lstinline!br!, \lstinline!ret! and \lstinline!unreachable! will unconditionally attempt to execute the next instruction in memory (i.e. increment the instruction pointer by instruction length).
 
 %Because of this, these instructions are referred to as \textit{terminators}, as their purpose is to disrupt what had otherwise been a linear flow from the beginning of this continus sequence of instructions, henceforth referred to as a \textit{basic block}.
 
-\label{appendix:llvmis}
-\begin{enumerate}
-    \item binary operations \lstinline!add!, \lstinline!and!, \lstinline!ashr!, \lstinline!lshr!, \lstinline!mul!, \lstinline!or!, \lstinline!sdiv!,\\\lstinline!srem!, \lstinline!shl!, \lstinline!sub! and \lstinline!xor!
-    \item integer comparison \lstinline!icmp! (conditions being \lstinline!eq!, \lstinline!ne!, \lstinline!sge!, \lstinline!sgt!, \lstinline!sle! and \lstinline!slt!)
-    \item memory/address operations \lstinline!alloca!, \lstinline!gep!, \lstinline!load! and \lstinline!store!
-    \item  \lstinline!mov! operations \lstinline!gep!, \lstinline!phi!, \lstinline!ptrtoint!, \lstinline!trunc!, and \lstinline!zext!
-    \item control flow operations \lstinline!br!, \lstinline!call! and \lstinline!ret!
-    \item a  nullary block terminator \lstinline!unreachable!
-\end{enumerate}
+%\label{appendix:llvmis}
+%\begin{enumerate}
+    %\item binary operations \lstinline!add!, \lstinline!and!, \lstinline!ashr!, \lstinline!lshr!, \lstinline!mul!, \lstinline!or!, \lstinline!sdiv!,\\\lstinline!srem!, \lstinline!shl!, \lstinline!sub! and \lstinline!xor!
+    %\item integer comparison \lstinline!icmp! (conditions being \lstinline!eq!, \lstinline!ne!, \lstinline!sge!, \lstinline!sgt!, \lstinline!sle! and \lstinline!slt!)
+    %\item memory/address operations \lstinline!alloca!, \lstinline!gep!, \lstinline!load! and \lstinline!store!
+    %\item  \lstinline!mov! operations \lstinline!gep!, \lstinline!phi!, \lstinline!ptrtoint!, \lstinline!trunc!, and \lstinline!zext!
+    %\item control flow operations \lstinline!br!, \lstinline!call! and \lstinline!ret!
+    %\item a  nullary block terminator \lstinline!unreachable!
+%\end{enumerate}
 
 %%%
 \subsection{Translating LLVM-{}- to x86}
@@ -1650,7 +1650,48 @@ jmp	_isqrt$10
      \caption{TODO}\label{fig:sqrt1.s}
    \end{minipage}
 \end{figure}
-This was resolved by relying on conditional movs immediately prior to branching conditionally. Specifically, the \texttt{cmoveq} instruction was used, which only moves the value if the equals flag (i.e. \texttt{ZF}) is set.
+
+\noindent This was resolved by relying on conditional \texttt{mov}s immediately prior to the conditional branch (i.e. \texttt{je}). Specifically, the \texttt{cmoveq} instruction was used, which only moves from source to destination if the equality flag (i.e. \texttt{ZF}) is set.
+Unfortunately the \texttt{cmoveq} instruction doesn't support indirect addressing, so in order to support spilled variables both the values need to be moved into registers as can be seen in Figure \ref{fig:fixed-ind-sqrt1.s}.
+
+
+
+\begin{figure}[H]
+   \begin{minipage}{0.48\textwidth}
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{gas}
+# ...
+# br i1 %9, label %10, label %5
+movq	%rdx, %rax
+cmpq	$0, %rax
+movq	%rbx, %rax
+cmoveq	%rax, %rsi
+je	_isqrt$5
+movq	%rsi, %rax
+movq	%rax, %rdx
+jmp	_isqrt$10
+# ...
+     \end{minted}
+     \caption{TODO}\label{fig:fixed-sqrt1.s}
+   \end{minipage}
+   \begin{minipage}{0.48\textwidth}
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{gas}
+# ...
+# br i1 %13, label %14, label %9
+movq	-88(%rbp), %rax
+cmpq	$0, %rax
+movq	-72(%rbp), %rax
+movq	-16(%rbp), %rcx
+cmoveq	%rax, %rcx
+movq	%rcx, -16(%rbp)
+je	_main$9
+movq	-16(%rbp), %rax
+# ...
+     \end{minted}
+     \caption{\texttt{-a greedy -n 0}}\label{fig:fixed-ind-sqrt1.s}
+   \end{minipage}
+\end{figure}
 
 % FIXME: check if above is sound
 
