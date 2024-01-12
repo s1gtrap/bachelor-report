@@ -1096,7 +1096,7 @@ and the spilled variable \texttt{\%c2}
 Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes.  This is similar to but  not the same as  the lack of interference edges between variables that are subject to move operations. This is because variables \(a\) and \(b\) may still be assigned different registers or even spilled if,  for instance, either of them are of significant degree.
 
 Coalescing joins nodes \(a\) and \(b\) to node \(ab\) preserving the edges of both to maintain soundness.
-Since all edges are preserved, the resulting node \(ab\) may be of a much higher degree. Because of this, only strategies that produce a \(k\)-colorable graph are worth considering, as additional spills negate the purpose entirely. One of the  strategies introduced in the Appel text is the \textit{Briggs} strategy  \cite[232]{tiger}, in which nodes \(a\) and \(b\) can be coalesced if and only if the resulting node \(ab\) has \(\leq K\) nieghbors of significant degree  (i.e. \(\geq K\)).
+Since all edges are preserved, the resulting node \(ab\) may be of a much higher degree. Because of this, only strategies that produce a \(k\)-colorable graph are worth considering, as additional spills negate the purpose entirely. One of the  strategies introduced in the Appel text is the \textit{Briggs} strategy  \cite[232]{tiger}, in which nodes \(a\) and \(b\) can be coalesced iff the resulting node \(ab\) has \(\leq K\) nieghbors of significant degree  (i.e. \(\geq K\)).
 
 Since the only move operations in use in LLVM-{}- are phi nodes, only variables that are subject to this sort of operation are eligible to be coalesced in this form. 
 Variables that can be coalesced can be thought of as having a preference edge, and any nodes with such an edge stand to benefit from coalescing, but this may only be done if they are not in interference.
@@ -1106,9 +1106,7 @@ Variables that can be coalesced can be thought of as having a preference edge, a
 
 Consider the previous example (Figure \ref{fig:countdown.ll}): when applied with the same \(k=2\) nothing happens regardless of which allocator is used (see Figure \ref{fig:countdown.briggs.dot2} which was generated using the \texttt{briggs} allocator). This is because although the \texttt{\%c1} and \texttt{\%c2} nodes are not in interference, both neighbors of \texttt{\%c2} are of significant degree (\(\mathit{deg}(\texttt{\%cn}) = 2 \geq 2\) and \(\mathit{deg}(\texttt{\%argc}) = 3 \geq 2\)). 
 Therefore they don't satisfy the Briggs criteria, and are not coalesced, resulting in the same interference graph as the \texttt{simple} allocator in Figure \ref{fig:countdown.dot}.
-But for some \(k \geq 2\), now there are fewer than \(k\) significant neighbors of \texttt{\%c2} (and \texttt{\%c1}), meaning the two can be coalesced, with the resulting node \texttt{\%c1, \%c2} having two neighbors of insignificant degree.
-
-
+But for some \(k \geq 2\), now there are fewer than \(k\) significant neighbors of \texttt{\%c2} (and \texttt{\%c1}), meaning the two can be coalesced, with the resulting node \texttt{\%c1, \%c2} having two neighbors of insignificant degree as can be seen in Figure \ref{fig:countdown.briggs.dot}.
 \begin{figure}[H]
      \centering
    \begin{minipage}[b]{0.50\linewidth}
@@ -1123,7 +1121,8 @@ But for some \(k \geq 2\), now there are fewer than \(k\) significant neighbors 
    \end{minipage}
 \end{figure}
 
-\noindent The purpose is only to assign the same registers to different variables. You don't need to note down information about blocks etc.
+\noindent The purpose is only to assign the same registers to different variables, which stands to benefit from less \texttt{mov} instructions being used.
+%. You don't need to note down information about blocks etc.
 
 %Strictly speaking, one could optimize many more mov instructions away if 
 
