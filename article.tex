@@ -702,7 +702,7 @@ define i32 @main (i32 %0, i8* %1) {
 \end{figure}
 
 \noindent If one were to note the \(\mathit{in}[s]\) and \(\mathit{out}[s]\) sets for each instruction \(s\) for each iteration, one would arrive at the two tables seen in Table \ref{tab:countll-rev-steps} and \ref{tab:countll-steps}.
-The number of iterations is nearly halfed when reverseing the list of instructions prior to dataflow as can be seen on \ref{tab:countll-rev-steps} when compared to \ref{tab:countll-steps}.
+The number of iterations is nearly halfed when reverseing the list of instructions prior to dataflow as can be seen on the amount of recursions of Table \ref{tab:countll-rev-steps} when compared to Table \ref{tab:countll-steps}.
 
 
 %\begin{NiceTabular}{|W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|}
@@ -1705,6 +1705,15 @@ movq	-16(%rbp), %rax
 It is difficult to assert the correctness of a compiler. While writing simple unit tests is easy, guaranteeing the correctness of code generated for any given input is on a different order of magnitude in terms of complexity.
 
 Validating the correctness of each instruction translation is a complicated task given how low-level it is. One approach is attaching a debugger and examining the state before and after the translated sequence of x86 instructions is executed. The result of applying a binary operation,  for instance, should only affect the assigned register.
+
+\subsection{Test Suite}
+
+In addition to my own cases and other programs from the internet, some cases from the LLVM test suite are also used.
+
+The structure of the test suite repository has a directory of so-called 'single source' C programs totalling to 2113. Of these only 1222 compiled successfully with \texttt{clang -S -emit-llvm} and of these only 624 parsed sucessfuly with the strip utility, of which 425 compiled successfully.
+
+% find ./SingleSource -name '*.c' -exec clang --target=x86_64-unknown-darwin -S -emit-llvm {} \;
+
 
 % TODO: kommenter på stripper
 
