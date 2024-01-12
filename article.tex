@@ -701,7 +701,7 @@ define i32 @main (i32 %0, i8* %1) {
    \end{minipage}
 \end{figure}
 
-\noindent If one were to note the \(\mathit{in}[s]\) and \(\mathit{out}[s]\) sets for each instruction \(s\) for each iteration one would arrive at the two tables seen in Table \ref{tab:countll-rev-steps} and \ref{tab:countll-steps}.
+\noindent If one were to note the \(\mathit{in}[s]\) and \(\mathit{out}[s]\) sets for each instruction \(s\) for each iteration, one would arrive at the two tables seen in Table \ref{tab:countll-rev-steps} and \ref{tab:countll-steps}.
 The number of iterations is nearly halfed when reverseing the list of instructions prior to dataflow as can be seen on \ref{tab:countll-rev-steps} when compared to \ref{tab:countll-steps}.
 
 
@@ -1105,7 +1105,7 @@ Variables that can be coalesced can be thought of as having a preference edge, a
 %When applied to the previous example , only \texttt{\%argc} and \texttt{\%c2} may be coalesced with \texttt{\%c1} as this is the only mov instruction. 
 
 Consider the previous example (Figure \ref{fig:countdown.ll}): when applied with the same \(k=2\) nothing happens regardless of which allocator is used (see Figure \ref{fig:countdown.briggs.dot2} which was generated using the \texttt{briggs} allocator). This is because although the \texttt{\%c1} and \texttt{\%c2} nodes are not in interference, both neighbors of \texttt{\%c2} are of significant degree (\(\mathit{deg}(\texttt{\%cn}) = 2 \geq 2\) and \(\mathit{deg}(\texttt{\%argc}) = 3 \geq 2\)). 
-There fore it doesn't satisfy the Briggs criteria, and are not coalesced, resulting in the same interference graph as the \texttt{simple} allocator in Figure \ref{fig:countdown.dot}.
+Therefore they don't satisfy the Briggs criteria, and are not coalesced, resulting in the same interference graph as the \texttt{simple} allocator in Figure \ref{fig:countdown.dot}.
 But for some \(k \geq 2\), now there are fewer than \(k\) significant neighbors of \texttt{\%c2} (and \texttt{\%c1}), meaning the two can be coalesced, with the resulting node \texttt{\%c1, \%c2} having two neighbors of insignificant degree.
 
 
@@ -1168,7 +1168,7 @@ let intervalstart insns (in_, out) =
    \end{minipage}
 \end{figure}
 
-\noindent Of note are the structures over which the folding is done: the \texttt{IT.t} is a \texttt{Map.S} module indexing earlier described symbol sets (i.e. \texttt{S.SS.t}). The reason for this is to iterate through intervals in increasing and decreasing order of start/length and end points respectively. The symbol table (\texttt{S.ST.t}) is to allow for reverse lookup, i.e. which program point variable \(s\) is defined, and lastly the symbol set (i.e. \texttt{S.SS.t}) which is just there to prevent multiple start points for the same variable.
+\noindent Of note are the structures over which the folding is done: the \texttt{IT.t} is a \texttt{Map.S} module indexing earlier described symbol sets (i.e. \texttt{S.SS.t}). The reason for doing this is to iterate through intervals in increasing and decreasing order of start/length and end points respectively. The symbol table (\texttt{S.ST.t}) is to allow for reverse lookup, i.e. which program point variable \(s\) is defined, and lastly the symbol set (i.e. \texttt{S.SS.t}) which is just there to prevent multiple start points for the same variable.
 
 
 \begin{figure}[H]
@@ -1445,7 +1445,7 @@ as concepts such as calling conventions, stack frames, or a \lstinline!FLAGS! re
 
 In contrast, the x86 \textit{instruction set architecture} (ISA) is targeting a  \textit{complex instruction set computer} (CISC) family of processors, the instructions of which perform a much broader set of operations \cite[p.~190]{tiger}. This is in part due to pipelining, i.e. an abstraction over the concrete implementation of the actual processor, which in turn is made for the sake of performance.
 
-But another more concise example of this would be the division/remainder operation: since integer division is a non-trivial iterative process wherein both the quotient and remainder is needed throughout, the result of both of these is stored in the \texttt{\%rax} and \texttt{\%rdx} registers respectively. This means two operations are performed simultaneously regardless of which value is used, hence they need to be restored before executing the next instruction, as any variables assigned to \lstinline!%rax! or \lstinline!%rdx! will be overwritten.
+Another more concise example of this would be the division/remainder operation: since integer division is a non-trivial iterative process wherein both the quotient and remainder is needed throughout, the result of both of these is stored in the \texttt{\%rax} and \texttt{\%rdx} registers respectively. This means two operations are performed simultaneously regardless of which value is used, hence they need to be restored before executing the next instruction, as any variables assigned to \lstinline!%rax! or \lstinline!%rdx! will be overwritten.
 
 To map each LLVM-{}- instruction to what amounts to the 'core' function in x86, consider Table \ref{tab:trans}. Instructions for which the size varies, the suffix is denoted with \texttt{x} instead. This is then replaced with the appropriate size suffix depending on the size denoted in the LLVM-{}- instruction. For example, most binary operations move the left-hand operand into \texttt{\%rax} and the right-hand operand into  \texttt{\%rcx}, after which the associated instruction from the table is performed. For x86, most operations are done in place, so for the most part \texttt{\%rax} is modified and moved to the destination after.
 
@@ -1463,7 +1463,7 @@ ashr     & sarx \%src, \%dst & \{\}\\
 bitcast  & movx \%src, \%dst & \{\}\\
 call     & \textrm{\textit{see \ref{impl-call}}} & \{\texttt{\%rax}, \texttt{\%rcx}, \texttt{\%rdx}, \texttt{\%rsi}, \texttt{\%r8-\%r11}\}\\
 gep      & \textrm{\textit{see \ref{impl-gep}}} & \{\}\\
-icmp     & cmpx \%src, \%dst & \{\texttt{\%rFLAGS}\}\\
+icmp     & \textrm{\textit{see \ref{impl-cond}}} & \{\texttt{\%rFLAGS}\}\\
 load     & movx (\%src), \%dst & \{\}\\
 lshr     & shrx \%src, \%dst & \{\}\\
 mul      & imulx \%src, \%dst & \{\texttt{\%rax}\}\\
@@ -1494,36 +1494,14 @@ zext     & movx \%src, \%dst & \{\}\\
  \hline
  LLVM-{}- & x86 & Registers affected\\
  \hline
-add      & addx \%src, \%dst & \{\}\\
-alloca   & subq \$n, \%rsp & \{\texttt{\%rsp}\}\\
-allocan  & subq \$n, \%rsp & \{\texttt{\%rsp}\}\\
-and      & andx \%src, \%dst & \{\}\\
-ashr     & sarx \%src, \%dst & \{\}\\
-bitcast  & movx \%src, \%dst & \{\}\\
-call     & \textrm{\textit{see \ref{impl-call}}} & \{\texttt{\%rax}, \texttt{\%rcx}, \texttt{\%rdx}, \texttt{\%rsi}, \texttt{\%r8-\%r11}\}\\
-gep      & \textrm{\textit{see \ref{impl-gep}}} & \{\}\\
-icmp     & cmpx \%src, \%dst & \{\texttt{\%rFLAGS}\}\\
-load     & movx (\%src), \%dst & \{\}\\
-lshr     & shrx \%src, \%dst & \{\}\\
-mul      & imulx \%src, \%dst & \{\texttt{\%rax}\}\\
-or       & orx \%src, \%dst & \{\}\\
-phi      & \textrm{\textit{see \ref{impl-phi}}} & \{\}\\
-ptrtoint & movx \%src, \%dst & \{\}\\
-sdiv     & idivx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
-select   &  & \{\}\\
-sext     & movx \%src, \%dst & \{\}\\
-shl      & shl \%src, \%dst & \{\}\\
-srem     & idivx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
-store    & movx \%src, (\%dst) & \{\}\\
-sub      & subx \%src, \%dst & \{\}\\
-trunc    & movx \%src, \%dst & \{\}\\
-udiv     & divx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
-urem     & divx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
-xor      & xorx \%src, \%dst & \{\}\\
-zext     & movx \%src, \%dst & \{\}\\
+ret     & epilogue, retq & \{\}\\
+br label \%l & jmp \%l & \{\}\\
+br i1 \%c, label \%t, label \%f & cmpx \%c & \{\}\\
+ & jz \%f & \\
+ & jmp \%t & \\
  \hline
 \end{tabular}
-\caption{LLVM-{}- instruction to x86 translation table}\label{tab:trans}
+\caption{LLVM-{}- terminators to x86 translation table}\label{tab:trans-terms}
 \end{table}
 
 
@@ -1569,6 +1547,10 @@ store i32 %10, i32* %8
      \caption{\texttt{clang -O1 -S -emit-llvm}}\label{fig:vector.ll}
    \end{minipage}
 \end{figure}
+
+
+\subsubsection{Implementing \mintinline{llvm}{icmp} instructions} \label{impl-cond}
+The \mintinline{llvm}{icmp} and \mintinline{llvm}{select} instructions both rely on the \texttt{cmpx} x86 instruction for most of the heavy lifting.
 
 \subsubsection{Implementing \mintinline{llvm}{phi} instructions}\label{impl-phi}
 Another irregular instruction is the \mintinline{llvm}{phi} instruction representing the \(\Phi\)-functions. Their  intended purpose is to copy data from whichever predecessor node was executed.
