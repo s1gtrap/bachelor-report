@@ -542,13 +542,13 @@ which can greatly reduce performance, but  allows for translation in linear time
 Another approach, which is a more precise approximation, is a specific variant of the dataflow analysis as described in \textit{Modern Compiler Implementation in ML} \cite{tiger} and \textit{Compilers: Principles, Techniques, and Tools} \cite{dragon}. In general, dataflow analysis is the process of finding the possible paths in which data may propagate through various branches of execution.  While several applications of this exist (like constant propagation, reaching defnitions, available expressions etc.), one that is immediately beneficial in the case of liveness analysis is one that traverses a CFG in the reverse order of execution (i.e.  \textit{backwards} flow), and extracts any variable that \textit{may} be used in execution (also referred to as \textit{backwards may} analysis). % FIXME: forklar hvorfor List.rev ikke udgør backwards flow
 
 This algorithm calculates which program points each variable may be accessed from with some conservative constraints known to maintain correctness. Specifically, these are the transfer and control-flow constraints. %, the former of which must satisfy a transfer function a
-The transfer constraint is based on a \textit{transfer function} that describes how liveness is affected across instructions. For each instruction, there is a transfer function that describes how liveness changes from one point to the one immediately after. For example, as an arithmetic operation needs to be assigned a new temporary variable, the liveness of a new variable is propagated to all  instructions  executed subsequently. This is done by applying the transfer function to the current \textit{live-out} set to stop further propagation of variables defined by the currently visited instruction. % TODO: In fact, because the IR is in SSA form, the only time 
+The transfer constraint is based on a \textit{transfer function} \cite[599]{dragon} that describes how liveness is affected across instructions. For each instruction, there is a transfer function that describes how liveness changes from one point to the one immediately after. For example, as an arithmetic operation needs to be assigned a new temporary variable, the liveness of a new variable is propagated to all  instructions  executed subsequently. This is done by applying the transfer function to the current \textit{live-out} set to stop further propagation of variables defined by the currently visited instruction: % TODO: In fact, because the IR is in SSA form, the only time 
 \begin{align}\label{flowin}
   \mathit{in}\left[n\right] &= \mathit{use}\left[n\right] \cup (\mathit{out}\left[n\right] - \mathit{def}\left[n\right])
 \end{align}
 with the \(\mathit{use}[n]\) set being defined as any variables that may be used and the \(\mathit{def}[n]\) as the set of variables defined in node \(n\). The \(\mathit{def}[n]\) either consists of one variable or equal to \(\emptyset\). The  \(\mathit{use}[n]\) set is effectively unbounded as some instructions take any \(m\) variables as parameters.
 
-Control-flow constraints, on the other hand, propagate the use of variables to previously executed instructions, expecting these to be defined somewhere further up the CFG. This is done by propagating the union of the \textit{live-in} set associated with all immediate successor nodes. This is also referred to as the \textit{meet operator}, whose operator depends on the type of dataflow analysis as well, but for liveness analysis a union is performed on the \textit{live-in} sets of  any successive  nodes:
+Control-flow constraints, on the other hand, propagate the use of variables to previously executed instructions, expecting these to be defined somewhere further up the CFG. This is done by propagating the union of the \textit{live-in} set associated with all immediate successor nodes. This is also referred to as the \textit{meet operator} \cite[605]{dragon}, whose operator depends on the type of dataflow analysis as well, but for liveness analysis a union is performed on the \textit{live-in} sets of  any successive  nodes:
 \begin{align}\label{flowout}
   \mathit{out}\left[n\right] &= \bigcup_{s\in \mathit{succ}\left[n\right]} \mathit{in}\left[s\right]
 \end{align}
@@ -590,7 +590,7 @@ Initially, two empty sets are associated with each instruction: the \textit{live
 
 %\subsubsection{Implementation}
 
-The simplest equations to implement are the \lstinline!def! and \lstinline!use! functions, as all of the values of interest are located immediately within the instruction itself and not hidden behind some layer of indirection:
+The simplest equations to implement are the \texttt{def} and \texttt{use} functions, as all of the values of interest are located immediately within the instruction itself and not hidden behind some layer of indirection:
 \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
 let def (s : S.SS.t) (insn : Cfg.insn) =
   match insn with Insn (Some dop, _) -> S.SS.add dop s | _ -> s
@@ -610,18 +610,7 @@ let use (s : S.SS.t) (insn : Cfg.insn) =
   | Term (Ret (_, Some o) | Cbr (o, _, _)) -> op o s
   | _ -> s
 \end{minted}
-Where \lstinline!S.SS! is a \lstinline!Set.S! module built over the \lstinline!symbol! type found in \lstinline!lib/symbol.ml!:
-\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
-type symbol = string * int
-(* ... *)
-module SS = Set.Make (struct
-  type t = symbol
-  let compare (_, n1) (_, n2) = compare n1 n2
-end)
-type set = SS.t
-\end{minted}
-
-\noindent The \texttt{flowin} function corresponds to the \textit{live-in} equation \eqref{flowin} and is implemented as follows:
+Where \texttt{S.SS} is a \texttt{Set.S} module built over the \texttt{Symbol.symbol} type found in \texttt{lib/symbol.ml}. The \texttt{flowin} function corresponds to the \textit{live-in} equation \eqref{flowin} and is implemented as follows:
 \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
 let flowin (i, insn) =
   let newin = S.SS.union (use insn) (S.SS.diff out.(i) (def insn)) in
@@ -642,8 +631,7 @@ let flowout (i, _) =
   if changed then out.(i) <- newout;
   changed
 \end{minted}
-
-With the actual dataflow analysis performed recursively as follows:
+The set operations are applied as you would with the \texttt{S.SS.t} struct, the only interesting part is noting whether changes were made, as this is needed further down in execution. The actual dataflow analysis performed recursively as follows:
 \begin{figure}[H]
 \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
 let dataflow (insns : Cfg.insn list) (ids : Cfg.G.V.t array) (g : Cfg.G.t) =
@@ -655,8 +643,7 @@ let dataflow (insns : Cfg.insn list) (ids : Cfg.G.V.t array) (g : Cfg.G.t) =
     let flowin = (* ... *)
     let flow changed insn = changed || flowout insn || flowin insn in
     if List.fold_left flow false insns then dataflow () else (in_, out)
-  in
-  dataflow ()
+  in dataflow ()
 \end{minted}
 \caption{Overall implementation of \texttt{dataflow}\label{fig:dataflow}}
 \end{figure}
@@ -702,8 +689,10 @@ define i32 @main (i32 %0, i8* %1) {
    \end{minipage}
 \end{figure}
 
-\noindent If one were to note the \(\mathit{in}[s]\) and \(\mathit{out}[s]\) sets for each instruction \(s\) for each iteration, one would arrive at the two tables seen in Table \ref{tab:countll-rev-steps} and \ref{tab:countll-steps}.
-The number of iterations is nearly halfed when reverseing the list of instructions prior to dataflow as can be seen on the amount of recursions of Table \ref{tab:countll-rev-steps} when compared to Table \ref{tab:countll-steps}.
+\noindent If one were to note the \(\mathit{in}[s]\) and \(\mathit{out}[s]\) sets for each instruction \(s\) for each iteration, one would arrive at Tables \ref{tab:countll-rev-steps} and \ref{tab:countll-steps}.
+The number of iterations is nearly halfed when reverseing the list of instructions prior to dataflow analysis as can be seen on
+how many columns are present in each.
+%the amount of recursions of Table \ref{tab:countll-rev-steps} when compared to Table \ref{tab:countll-steps}.
 
 
 %\begin{NiceTabular}{|W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|W{c}{0.5cm} W{c}{0.5cm}|}
@@ -714,7 +703,7 @@ The number of iterations is nearly halfed when reverseing the list of instructio
 \makebox[\textwidth][c]{
 \begin{NiceTabular}{|c|c c|c c|c c|c c|c c|c c|c c|c c|}
   \hline
-  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out & in & out\\
+  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out & in & out\\[-0.5ex]
   \hline
   0  & 0  & 3 & 0  & 3 & 0  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8\\
   1  & 3  &  & 3  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8\\
@@ -738,7 +727,7 @@ The number of iterations is nearly halfed when reverseing the list of instructio
 \setlength{\tabcolsep}{0.9pt}
 \begin{NiceTabular}{|c|c c|c c|c c|c c|c c|c c|c c|c c|c c|c c|c c|c c|}
   \hline
-  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out\\
+  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out\\[-0.5ex]
   \hline
   0  & 0  & 3 & 0  &  & 0  & 3 & 0  & 3 & 0  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8\\
   1  & 3  &  & 3  &  & 3  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8\\
@@ -797,25 +786,35 @@ Although the Appel text \cite{tiger} describes interference of variables with co
 for simplicity's sake.
 
 Again the \texttt{OCamlgraph} library is used, but this time \texttt{Imperative.Graph.Abstract} is parameterized over the aforementioned set type \texttt{S.SS.t}. % FIXME: whyyy????
-
+Such that several variables can be assigned to the same node (more on this in section \ref{coalescing}). A helper function is defined, that looks up a variable's symbol in the symbol table over vertices and adds it if it doesn't exist. Otherwise it simply returns the existing vertex identifier:
+\begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let vert g e t =
+  match S.ST.find_opt e t with
+  | Some v -> (v, t)
+  | None ->
+      let v = S.SS.add e S.SS.empty |> G.V.create in
+      G.add_vertex g v;
+      (v, S.ST.add e v t)
+\end{minted}
+Then the interference graph is derived in Figure \ref{fig:interf}. First, all parameters are connected, then the instructions are processed according to the book.
 
 \begin{figure}[H]
 \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
-let interf (params : Ll.uid list) (insns : Cfg.insn list) _ (out : S.SS.t array)
-    : G.V.t S.table * G.t =
+let interf (params : Ll.uid list) (insns : Cfg.insn list) _ (out : S.SS.t array) =
   let g = G.create () in
-  let vert e t = (* .. *) in
-  let vert2 t e = vert e t |> snd and vert3 e t = vert e t |> snd in
-  (* add params *)
+  let vert2 t e = vert g e t |> snd and vert3 e t = vert g e t |> snd in
+  let edge s1 s2 t =
+    let v1, t = vert g s1 t in
+    let v2, t = vert g s2 t in
+    if v1 <> v2 then G.add_edge g v1 v2;
+    t
+  in
   let t = List.fold_left vert2 S.ST.empty params in
-  (* connect all params *)
-  let edge v1 v2 t = (* .. *) in
   let param t p1 =
     let param t p2 = if p1 <> p2 then edge p1 p2 t else t in
     List.fold_left param t params
   in
   let t = List.fold_left param t params in
-  (* add all defs *)
   let setverts t s = S.SS.fold vert3 s t in
   let t = List.map (def S.SS.empty) insns |> List.fold_left setverts t in
   let defoutedges t (i, n) =
@@ -1091,7 +1090,7 @@ and the spilled variable \texttt{\%c2}
 
 %% TODO
 %* optimistic coloring
-\subsection{Coalescing}
+\subsection{Coalescing} \label{coalescing}
 
 
 Coalescing is the process of eliminating moves/copies of data from one GPR to another by combining their interference graph nodes.  This is similar to but  not the same as  the lack of interference edges between variables that are subject to move operations. This is because variables \(a\) and \(b\) may still be assigned different registers or even spilled if,  for instance, either of them are of significant degree.
