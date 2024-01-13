@@ -1514,9 +1514,7 @@ let linearscan k insns =
 
 %The intermediate representation emitted by the frontend of a compiler serves as a stepping stone independent of the target architecture. The \lstinline!LLVM! infrastructure is the industry standard in terms of bridging this gap and was consequently the library used to translate the semantically annotated abstract syntax tree to executable machine code in the 2022 compilers course. As this project is an expansion on this, it follows naturally to build on this. 
 
-The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as, for instance, neither of the languages implemented support interrupts, floating point operations and so on, and instead only strive to cover the basics of compilers.
-
-Some additional instructions are included, like \lstinline!trunc! and \lstinline!switch!, to widen the range of supported frontend languages with the clang compiler.
+The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as, for instance, neither of the languages implemented support interrupts, floating point operations etc., and instead only strive to cover the basics of compilers. In additional some other instructions are also included, like \lstinline!trunc! and \lstinline!switch!, to widen the range of supported frontend languages with the clang compiler.
 %been added in order to help cover more generated LLVM. % FIXME
 %with only four distinct block terminators 
 %\begin{enumerate}
