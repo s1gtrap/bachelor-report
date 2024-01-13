@@ -1845,11 +1845,126 @@ arg(s) & clang & greedy 12 & greedy 8 & greedy 6 & greedy 4 & greedy 2 & greedy 
 \noindent While it's not a complete 1:1 in terms of runtime as the Tiger compiler seems to perform slightly better than Greedy 0 (by \textasciitilde 30\% or so), that does make sense as there are marginally more instructions involved with each operation, not to mention the extra care taken to ensure calling conventions are upheld.
 
 
-\subsubsection{\lstinline!benches/ackermann.ll!}
+%\subsubsection{\lstinline!benches/ackermann.ll!}
 
-Another benchmark that derives highly from the recursive structure of \lstinline!fib.ll! above is the Ackermann function.
+%Another benchmark that derives highly from the recursive structure of \lstinline!fib.ll! above is the Ackermann function.
 
 %TODO: bedøm om det giver mening
+
+
+
+
+\subsubsection{\lstinline!benches/phis.ll!}
+Coalescing with the Briggs allocator is evidently quite beneficial, as the it does out perform most benchmarks. This is obviously because eliminating movs stand to gain. A more direct approach to demonstrating this is with parameterized benchmarks. While in theory a phi node has the potential to eliminate one \texttt{mov} instruction, in practice this might be more beneficial due to the implementation.
+The \texttt{benches/phis.py <n> <m>} script will generate a \texttt{.ll} program consisting of \(m\) phi nodes over \(n\) iterations.
+%Parameterized over how many phi moves need to be made per iteration. Sure most time might be spent in \texttt{@printf}, but this is constant across all runs, and in fact serves a purpose of adding extra load.
+
+
+
+
+\begin{NiceTabular}{|c|ccccccccc|}
+\hline
+arg(s) & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear 2 & linear 12 & greedy 12 & greedy 0 \\
+\hline
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 33699586& \cellcolor[rgb]{0.9990234375,0.9833984375,0.75} 2.49352x& \cellcolor[rgb]{0.9990234375,0.9833984375,0.75} 2.49358x& \cellcolor[rgb]{0.8115234375,0.9990234375,0.75} 1.24889x& \cellcolor[rgb]{0.8115234375,0.9990234375,0.75} 1.24890x& \cellcolor[rgb]{0.9990234375,0.9833984375,0.75} 2.49352x& \cellcolor[rgb]{0.9990234375,0.9833984375,0.75} 2.49355x& \cellcolor[rgb]{0.9990234375,0.9833984375,0.75} 2.49351x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 11.61953x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 33696431& \cellcolor[rgb]{0.9990234375,0.9814453125,0.75} 2.54359x& \cellcolor[rgb]{0.9990234375,0.9814453125,0.75} 2.55986x& \cellcolor[rgb]{0.8740234375,0.9990234375,0.75} 1.49846x& \cellcolor[rgb]{0.873046875,0.9990234375,0.75} 1.49796x& \cellcolor[rgb]{0.9990234375,0.9833984375,0.75} 2.49373x& \cellcolor[rgb]{0.9990234375,0.9833984375,0.75} 2.49378x& \cellcolor[rgb]{0.9990234375,0.9814453125,0.75} 2.54356x& \cellcolor[rgb]{0.9990234375,0.75,0.75} 11.52326x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 50475128& \cellcolor[rgb]{0.9453125,0.9990234375,0.75} 1.78694x& \cellcolor[rgb]{0.998046875,0.9990234375,0.75} 1.99722x& \cellcolor[rgb]{0.791015625,0.9990234375,0.75} 1.16621x& \cellcolor[rgb]{0.83203125,0.9990234375,0.75} 1.33250x& \cellcolor[rgb]{0.9150390625,0.9990234375,0.75} 1.66480x& \cellcolor[rgb]{0.9150390625,0.9990234375,0.75} 1.66483x& \cellcolor[rgb]{0.94140625,0.9990234375,0.75} 1.77143x& \cellcolor[rgb]{0.9990234375,0.7939453125,0.75} 8.57567x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 67274018& \cellcolor[rgb]{0.935546875,0.9990234375,0.75} 1.74795x& \cellcolor[rgb]{0.966796875,0.9990234375,0.75} 1.87263x& \cellcolor[rgb]{0.76171875,0.9990234375,0.75} 1.04956x& \cellcolor[rgb]{0.7646484375,0.9990234375,0.75} 1.06208x& \cellcolor[rgb]{0.8740234375,0.9990234375,0.75} 1.49853x& \cellcolor[rgb]{0.8115234375,0.9990234375,0.75} 1.24908x& \cellcolor[rgb]{0.87890625,0.9990234375,0.75} 1.52063x& \cellcolor[rgb]{0.9990234375,0.8564453125,0.75} 6.57981x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 84029983& \cellcolor[rgb]{0.8486328125,0.9990234375,0.75} 1.39938x& \cellcolor[rgb]{0.9482421875,0.9990234375,0.75} 1.79869x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00002x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00003x& \cellcolor[rgb]{0.82421875,0.9990234375,0.75} 1.29955x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00004x& \cellcolor[rgb]{0.9990234375,0.8681640625,0.75} 6.19846x& \cellcolor[rgb]{0.9990234375,0.875,0.75} 5.98194x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 100810530& \cellcolor[rgb]{0.8740234375,0.9990234375,0.75} 1.49925x& \cellcolor[rgb]{0.95703125,0.9990234375,0.75} 1.83217x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99997x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99996x& \cellcolor[rgb]{0.8115234375,0.9990234375,0.75} 1.24967x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99998x& \cellcolor[rgb]{0.9990234375,0.9169921875,0.75} 4.60493x& \cellcolor[rgb]{0.9990234375,0.8798828125,0.75} 5.80149x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 117587019& \cellcolor[rgb]{0.837890625,0.9990234375,0.75} 1.35669x& \cellcolor[rgb]{0.9462890625,0.9990234375,0.75} 1.78907x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.88585x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.90488x& \cellcolor[rgb]{0.802734375,0.9990234375,0.75} 1.21403x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.85730x& \cellcolor[rgb]{0.9990234375,0.9326171875,0.75} 4.10513x& \cellcolor[rgb]{0.9990234375,0.888671875,0.75} 5.51438x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 134365885& \cellcolor[rgb]{0.8740234375,0.9990234375,0.75} 1.49947x& \cellcolor[rgb]{0.9521484375,0.9990234375,0.75} 1.81229x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.87512x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.87515x& \cellcolor[rgb]{0.7958984375,0.9990234375,0.75} 1.18732x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.87514x& \cellcolor[rgb]{0.9990234375,0.947265625,0.75} 3.63380x& \cellcolor[rgb]{0.9990234375,0.9111328125,0.75} 4.81382x\\
+\hline
+\end{NiceTabular}
+
+
+1074877208
+% -O0
+\begin{table}[H]
+\makebox[\textwidth][c]{
+\begin{NiceTabular}{|c|ccccccccc|}
+\hline
+phis & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear 2 & linear 12 & greedy 12 & greedy 0 \\
+\hline
+ 0 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 150762& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99922x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00386x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00104x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99880x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00325x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99096x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00077x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99764x\\
+ 1 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 263112& \cellcolor[rgb]{0.9453125,0.9990234375,0.75} 1.78765x& \cellcolor[rgb]{0.9580078125,0.9990234375,0.75} 1.83810x& \cellcolor[rgb]{0.8154296875,0.9990234375,0.75} 1.26448x& \cellcolor[rgb]{0.9365234375,0.9990234375,0.75} 1.75223x& \cellcolor[rgb]{0.9384765625,0.9990234375,0.75} 1.75782x& \cellcolor[rgb]{0.939453125,0.9990234375,0.75} 1.76278x& \cellcolor[rgb]{0.9453125,0.9990234375,0.75} 1.78716x& \cellcolor[rgb]{0.9990234375,0.865234375,0.75} 6.27904x\\
+ 2 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 333724& \cellcolor[rgb]{0.8603515625,0.9990234375,0.75} 1.44531x& \cellcolor[rgb]{0.8955078125,0.9990234375,0.75} 1.58670x& \cellcolor[rgb]{0.7734375,0.9990234375,0.75} 1.09621x& \cellcolor[rgb]{0.7978515625,0.9990234375,0.75} 1.19483x& \cellcolor[rgb]{0.8466796875,0.9990234375,0.75} 1.39069x& \cellcolor[rgb]{0.8466796875,0.9990234375,0.75} 1.39096x& \cellcolor[rgb]{0.8642578125,0.9990234375,0.75} 1.45969x& \cellcolor[rgb]{0.9990234375,0.896484375,0.75} 5.28416x\\
+ 3 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 399042& \cellcolor[rgb]{0.8720703125,0.9990234375,0.75} 1.49027x& \cellcolor[rgb]{0.892578125,0.9990234375,0.75} 1.57311x& \cellcolor[rgb]{0.7568359375,0.9990234375,0.75} 1.03136x& \cellcolor[rgb]{0.7587890625,0.9990234375,0.75} 1.03867x& \cellcolor[rgb]{0.8310546875,0.9990234375,0.75} 1.32618x& \cellcolor[rgb]{0.7900390625,0.9990234375,0.75} 1.16354x& \cellcolor[rgb]{0.8310546875,0.9990234375,0.75} 1.32695x& \cellcolor[rgb]{0.9990234375,0.9169921875,0.75} 4.61992x\\
+ 4 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 464640& \cellcolor[rgb]{0.8193359375,0.9990234375,0.75} 1.28048x& \cellcolor[rgb]{0.8896484375,0.9990234375,0.75} 1.56253x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00015x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99836x& \cellcolor[rgb]{0.8017578125,0.9990234375,0.75} 1.21081x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99861x& \cellcolor[rgb]{0.9990234375,0.9375,0.75} 3.96512x& \cellcolor[rgb]{0.9990234375,0.9208984375,0.75} 4.48737x\\
+ 5 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 529535& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37214x& \cellcolor[rgb]{0.9033203125,0.9990234375,0.75} 1.61569x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99931x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99959x& \cellcolor[rgb]{0.7939453125,0.9990234375,0.75} 1.17952x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99948x& \cellcolor[rgb]{0.9990234375,0.94921875,0.75} 3.58774x& \cellcolor[rgb]{0.9990234375,0.921875,0.75} 4.47259x\\
+ 6 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 594553& \cellcolor[rgb]{0.818359375,0.9990234375,0.75} 1.27726x& \cellcolor[rgb]{0.9013671875,0.9990234375,0.75} 1.61016x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.91261x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.92786x& \cellcolor[rgb]{0.7900390625,0.9990234375,0.75} 1.16424x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.89141x& \cellcolor[rgb]{0.9990234375,0.955078125,0.75} 3.38554x& \cellcolor[rgb]{0.9990234375,0.921875,0.75} 4.46924x\\
+ 7 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 659461& \cellcolor[rgb]{0.8486328125,0.9990234375,0.75} 1.39945x& \cellcolor[rgb]{0.90234375,0.9990234375,0.75} 1.61499x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.90111x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.90219x& \cellcolor[rgb]{0.787109375,0.9990234375,0.75} 1.15128x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.90144x& \cellcolor[rgb]{0.9990234375,0.96484375,0.75} 3.08855x& \cellcolor[rgb]{0.9990234375,0.935546875,0.75} 4.03288x\\
+\end{NiceTabular}}
+\caption{\label{tab:dumb-fib-greedy}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
+\end{table}
+
+
+
+% -O1
+\begin{table}[H]
+\makebox[\textwidth][c]{
+\begin{NiceTabular}{|c|ccccccccc|}
+\hline
+phis & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear 2 & linear 12 & greedy 12 & greedy 0 \\
+\hline
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 150756& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00269x& \cellcolor[rgb]{0.7509765625,0.9990234375,0.75} 1.00742x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00356x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00237x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99991x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00269x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99794x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00298x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 266509& \cellcolor[rgb]{0.94140625,0.9990234375,0.75} 1.76877x& \cellcolor[rgb]{0.9521484375,0.9990234375,0.75} 1.81332x& \cellcolor[rgb]{0.8115234375,0.9990234375,0.75} 1.24997x& \cellcolor[rgb]{0.93359375,0.9990234375,0.75} 1.74009x& \cellcolor[rgb]{0.93359375,0.9990234375,0.75} 1.73912x& \cellcolor[rgb]{0.9345703125,0.9990234375,0.75} 1.74314x& \cellcolor[rgb]{0.9404296875,0.9990234375,0.75} 1.76571x& \cellcolor[rgb]{0.9990234375,0.8681640625,0.75} 6.19913x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 331770& \cellcolor[rgb]{0.8720703125,0.9990234375,0.75} 1.49255x& \cellcolor[rgb]{0.8974609375,0.9990234375,0.75} 1.59420x& \cellcolor[rgb]{0.775390625,0.9990234375,0.75} 1.10326x& \cellcolor[rgb]{0.7998046875,0.9990234375,0.75} 1.20125x& \cellcolor[rgb]{0.8486328125,0.9990234375,0.75} 1.39740x& \cellcolor[rgb]{0.8486328125,0.9990234375,0.75} 1.39905x& \cellcolor[rgb]{0.8701171875,0.9990234375,0.75} 1.48485x& \cellcolor[rgb]{0.9990234375,0.8955078125,0.75} 5.31939x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 398255& \cellcolor[rgb]{0.8720703125,0.9990234375,0.75} 1.49334x& \cellcolor[rgb]{0.892578125,0.9990234375,0.75} 1.57569x& \cellcolor[rgb]{0.7578125,0.9990234375,0.75} 1.03280x& \cellcolor[rgb]{0.759765625,0.9990234375,0.75} 1.04240x& \cellcolor[rgb]{0.83203125,0.9990234375,0.75} 1.32999x& \cellcolor[rgb]{0.7900390625,0.9990234375,0.75} 1.16465x& \cellcolor[rgb]{0.83203125,0.9990234375,0.75} 1.33295x& \cellcolor[rgb]{0.9990234375,0.9169921875,0.75} 4.62699x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 463887& \cellcolor[rgb]{0.8203125,0.9990234375,0.75} 1.28291x& \cellcolor[rgb]{0.8876953125,0.9990234375,0.75} 1.55488x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00064x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00080x& \cellcolor[rgb]{0.8017578125,0.9990234375,0.75} 1.21103x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99887x& \cellcolor[rgb]{0.9990234375,0.9375,0.75} 3.97028x& \cellcolor[rgb]{0.9990234375,0.9208984375,0.75} 4.49752x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 529682& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37111x& \cellcolor[rgb]{0.9033203125,0.9990234375,0.75} 1.61877x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99918x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00048x& \cellcolor[rgb]{0.7958984375,0.9990234375,0.75} 1.18536x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99971x& \cellcolor[rgb]{0.9990234375,0.94921875,0.75} 3.58938x& \cellcolor[rgb]{0.9990234375,0.921875,0.75} 4.44715x\\
+& \cellcolor[rgb]{0.75,0.9990234375,0.75} 594307& \cellcolor[rgb]{0.8173828125,0.9990234375,0.75} 1.27157x& \cellcolor[rgb]{0.9013671875,0.9990234375,0.75} 1.60988x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.91407x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.92725x& \cellcolor[rgb]{0.791015625,0.9990234375,0.75} 1.16608x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.89112x& \cellcolor[rgb]{0.9990234375,0.955078125,0.75} 3.38938x& \cellcolor[rgb]{0.9990234375,0.921875,0.75} 4.46031x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 659352& \cellcolor[rgb]{0.8486328125,0.9990234375,0.75} 1.39923x& \cellcolor[rgb]{0.9033203125,0.9990234375,0.75} 1.61575x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.90244x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.90256x& \cellcolor[rgb]{0.787109375,0.9990234375,0.75} 1.15120x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.90131x& \cellcolor[rgb]{0.9990234375,0.96484375,0.75} 3.08998x& \cellcolor[rgb]{0.9990234375,0.935546875,0.75} 4.03296x\\
+\end{NiceTabular}}
+\caption{\label{tab:dumb-fib-greedy}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
+\end{table}
+
+
+
+\begin{table}[H]
+\makebox[\textwidth][c]{
+\begin{NiceTabular}{|c|ccccccccc|}
+\hline
+arg(s) & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear 2 & linear 12 & greedy 12 & greedy 0 \\
+\hline
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 150790& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99873x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00204x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00055x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00202x& \cellcolor[rgb]{0.7509765625,0.9990234375,0.75} 1.00475x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99925x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.99983x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00036x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 266858& \cellcolor[rgb]{0.939453125,0.9990234375,0.75} 1.76227x& \cellcolor[rgb]{0.951171875,0.9990234375,0.75} 1.81025x& \cellcolor[rgb]{0.8095703125,0.9990234375,0.75} 1.24026x& \cellcolor[rgb]{0.93359375,0.9990234375,0.75} 1.73967x& \cellcolor[rgb]{0.93359375,0.9990234375,0.75} 1.73845x& \cellcolor[rgb]{0.9326171875,0.9990234375,0.75} 1.73599x& \cellcolor[rgb]{0.939453125,0.9990234375,0.75} 1.76279x& \cellcolor[rgb]{0.9990234375,0.8681640625,0.75} 6.18927x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 332932& \cellcolor[rgb]{0.8681640625,0.9990234375,0.75} 1.47463x& \cellcolor[rgb]{0.896484375,0.9990234375,0.75} 1.58958x& \cellcolor[rgb]{0.7734375,0.9990234375,0.75} 1.09780x& \cellcolor[rgb]{0.7978515625,0.9990234375,0.75} 1.19567x& \cellcolor[rgb]{0.8466796875,0.9990234375,0.75} 1.39187x& \cellcolor[rgb]{0.84765625,0.9990234375,0.75} 1.39397x& \cellcolor[rgb]{0.86328125,0.9990234375,0.75} 1.45798x& \cellcolor[rgb]{0.9990234375,0.8955078125,0.75} 5.30079x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 396964& \cellcolor[rgb]{0.873046875,0.9990234375,0.75} 1.49802x& \cellcolor[rgb]{0.89453125,0.9990234375,0.75} 1.58318x& \cellcolor[rgb]{0.7578125,0.9990234375,0.75} 1.03435x& \cellcolor[rgb]{0.7607421875,0.9990234375,0.75} 1.04439x& \cellcolor[rgb]{0.8310546875,0.9990234375,0.75} 1.32655x& \cellcolor[rgb]{0.7919921875,0.9990234375,0.75} 1.16965x& \cellcolor[rgb]{0.8330078125,0.9990234375,0.75} 1.33411x& \cellcolor[rgb]{0.9990234375,0.916015625,0.75} 4.64216x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 463143& \cellcolor[rgb]{0.8193359375,0.9990234375,0.75} 1.27994x& \cellcolor[rgb]{0.8916015625,0.9990234375,0.75} 1.56894x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00193x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00219x& \cellcolor[rgb]{0.802734375,0.9990234375,0.75} 1.21525x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00036x& \cellcolor[rgb]{0.9990234375,0.9375,0.75} 3.97536x& \cellcolor[rgb]{0.9990234375,0.9208984375,0.75} 4.50366x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 528926& \cellcolor[rgb]{0.841796875,0.9990234375,0.75} 1.37202x& \cellcolor[rgb]{0.904296875,0.9990234375,0.75} 1.62053x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00265x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00090x& \cellcolor[rgb]{0.7958984375,0.9990234375,0.75} 1.18442x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00260x& \cellcolor[rgb]{0.9990234375,0.94921875,0.75} 3.59263x& \cellcolor[rgb]{0.9990234375,0.921875,0.75} 4.46336x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 594806& \cellcolor[rgb]{0.818359375,0.9990234375,0.75} 1.27651x& \cellcolor[rgb]{0.9013671875,0.9990234375,0.75} 1.60931x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.91222x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.92581x& \cellcolor[rgb]{0.791015625,0.9990234375,0.75} 1.16478x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.89116x& \cellcolor[rgb]{0.9990234375,0.955078125,0.75} 3.38589x& \cellcolor[rgb]{0.9990234375,0.921875,0.75} 4.46530x\\
+ & \cellcolor[rgb]{0.75,0.9990234375,0.75} 660398& \cellcolor[rgb]{0.84765625,0.9990234375,0.75} 1.39599x& \cellcolor[rgb]{0.9013671875,0.9990234375,0.75} 1.60987x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.89423x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.90015x& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14754x& \cellcolor[rgb]{0.75,0.9990234375,0.75} 0.90032x& \cellcolor[rgb]{0.9990234375,0.96484375,0.75} 3.08470x& \cellcolor[rgb]{0.9990234375,0.935546875,0.75} 4.02611x\\
+\hline
+\end{NiceTabular}}
+\caption{\label{tab:dumb-fib-greedy}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
+\end{table}
+
+
+
+
+
+
+
+
+\subsubsection{\lstinline!benches/subset.ll!}
+A suitable example for nested loop iteration is \texttt{benches/subset.ll}. It's a very intuitive program that simply prints all \(2^n\) of a set of \(n\) elements, given as command line arguments. This is done by incrementing \(i\) by 1 from 0 to \(2^n-1\) and then printing the \(j\)th entry of the arguments array iff the \(j\)th bit of \(i\) is set. This leads to \(2^n\) repetitions of the outer loop and \(n\) of the inner, leading to \(2^n n\) repetitions. Since 
+\begin{table}[H]
+\makebox[\textwidth][c]{
+\begin{NiceTabular}{|c|cccccccc|}
+\hline
+n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
+\hline
+14 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08770x& \cellcolor[rgb]{0.787109375,0.9990234375,0.75} 1.15188x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08832x& \cellcolor[rgb]{0.7890625,0.9990234375,0.75} 1.15813x& \cellcolor[rgb]{0.98046875,0.9990234375,0.75} 1.92564x& \cellcolor[rgb]{0.9990234375,0.98046875,0.75} 2.59504x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.95798x\\
+15 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08304x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14485x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08536x& \cellcolor[rgb]{0.787109375,0.9990234375,0.75} 1.14973x& \cellcolor[rgb]{0.9833984375,0.9990234375,0.75} 1.93885x& \cellcolor[rgb]{0.9990234375,0.9794921875,0.75} 2.60300x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.96001x\\
+16 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08622x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14309x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08345x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14388x& \cellcolor[rgb]{0.9853515625,0.9990234375,0.75} 1.94770x& \cellcolor[rgb]{0.9990234375,0.978515625,0.75} 2.62809x& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99463x\\
+17 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08533x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14335x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08652x& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14605x& \cellcolor[rgb]{0.986328125,0.9990234375,0.75} 1.94922x& \cellcolor[rgb]{0.9990234375,0.978515625,0.75} 2.64844x& \cellcolor[rgb]{0.9990234375,0.966796875,0.75} 3.01363x\\
+\hline
+\end{NiceTabular}}
+\caption{\label{tab:subset}Benchmark of \texttt{benches/sieven.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
+\end{table}
+
+
 
 
 
@@ -1914,22 +2029,6 @@ arg(s) & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 1
 \hline
 \end{NiceTabular}}
 \caption{\label{tab:sieven}Benchmark of \texttt{benches/sieven.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
-\end{table}
-
-\subsubsection{\lstinline!benches/subset.ll!}
-\begin{table}[H]
-\makebox[\textwidth][c]{
-\begin{NiceTabular}{|c|cccccccc|}
-\hline
-n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & greedy 0 \\
-\hline
-14 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08770x& \cellcolor[rgb]{0.787109375,0.9990234375,0.75} 1.15188x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08832x& \cellcolor[rgb]{0.7890625,0.9990234375,0.75} 1.15813x& \cellcolor[rgb]{0.98046875,0.9990234375,0.75} 1.92564x& \cellcolor[rgb]{0.9990234375,0.98046875,0.75} 2.59504x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.95798x\\
-15 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08304x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14485x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08536x& \cellcolor[rgb]{0.787109375,0.9990234375,0.75} 1.14973x& \cellcolor[rgb]{0.9833984375,0.9990234375,0.75} 1.93885x& \cellcolor[rgb]{0.9990234375,0.9794921875,0.75} 2.60300x& \cellcolor[rgb]{0.9990234375,0.96875,0.75} 2.96001x\\
-16 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08622x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14309x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08345x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14388x& \cellcolor[rgb]{0.9853515625,0.9990234375,0.75} 1.94770x& \cellcolor[rgb]{0.9990234375,0.978515625,0.75} 2.62809x& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 2.99463x\\
-17 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1.00000x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08533x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14335x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08652x& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14605x& \cellcolor[rgb]{0.986328125,0.9990234375,0.75} 1.94922x& \cellcolor[rgb]{0.9990234375,0.978515625,0.75} 2.64844x& \cellcolor[rgb]{0.9990234375,0.966796875,0.75} 3.01363x\\
-\hline
-\end{NiceTabular}}
-\caption{\label{tab:subset}Benchmark of \texttt{benches/sieven.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
 \end{table}
 
 \subsubsection{\lstinline!benches/sha256.ll!}
