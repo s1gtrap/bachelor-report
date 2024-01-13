@@ -782,7 +782,7 @@ The construction of an interference graph only depends on the \textit{live-out} 
 
 Because of this, for any phi node of the form 
 \begin{equation}
-i a = \Phi (b_1, ..., b_n) \label{phi}
+ a = \Phi (b_1, ..., b_n) \label{phi}
 \end{equation}
 add edges to all \textit{live-out} variables not in \(\{b_1, ..., b_n\}\)
 \[
@@ -944,7 +944,7 @@ If at first a single node of insignificant degree (i.e. \(< 2\)) is selected, it
     \caption{Spill \texttt{\%c2}}
   \end{minipage}%
 \end{figure}
-\noindent From this point onwards  nothing can be done to further simplify the graph as all of the remaining nodes are of significant degree (\(\geq 2\)). Therefore, one of the remaining nodes is spilled to memory and entirely removed from the graph as can be seen on Figure \ref{fig:countdown.dot4} and the stack reset as can be seen on Figure \ref{fig:countdown.stack4}.
+\noindent From this point on  nothing can be done to further simplify the graph as all of the remaining nodes are of significant degree (\(\geq 2\)). Therefore, one of the remaining nodes is spilled to memory and entirely removed from the graph as can be seen on Figure \ref{fig:countdown.dot4} and the stack reset as can be seen on Figure \ref{fig:countdown.stack4}.
 
 \begin{figure}[H]
   \centering
@@ -1122,9 +1122,112 @@ But for some \(k \geq 2\), now there are fewer than \(k\) significant neighbors 
 \end{figure}
 
 \noindent The purpose is only to assign the same registers to different variables, which stands to benefit from less \texttt{mov} instructions being used.
+\subsection{Implementation}
+
+The first step is deriving all preference edges:
+
+\begin{figure}[H]
+  \centering
+  \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let prefer (insns : Cfg.insn list) : S.SS.t S.ST.t =
+  let insn t = function
+    | Cfg.Insn (Some d, Ll.PhiNode (_, ops)) ->
+        List.fold_left
+          (fun t o ->
+            match o with
+            | Ll.Id sop, _ ->
+                S.ST.update sop
+                  (function
+                    | Some s -> Some (S.SS.add d s)
+                    | None -> Some (S.SS.singleton d))
+                  t
+            | _ -> t)
+          t ops
+    | _ -> t
+  in
+  List.fold_left insn S.ST.empty insns
+  \end{minted}
+  \caption{Implementation of \texttt{prefer} in \texttt{lib/coalesce.ml}}\label{fig:prefer.ml}
+\end{figure}
+\noindent This is done simply by iterating over all of the instructions, and for every phi node, add a preference edge between \(a\) on the left-hand side of \eqref{phi} and all \(b_i\) on the right. Of note is the fact that only operands of the form \(\%i\) (i.e. \texttt{Id} variants of the \texttt{operand} type) are considered. This is because immediate values may also be specified in an LLVM phi node, whose \texttt{mov} instruction  don't make sense to eliminate. % FIXME: is this true?
+
+Briggs coalescing is then implemented as follows:
+\begin{figure}[H]
+  \centering
+  \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let coalesce_briggs k (prefs : S.SS.t S.ST.t)
+    ((l, g) : Lva.G.V.t S.ST.t * Lva.G.t) : Lva.G.V.t S.table * Lva.G.t =
+  let try_coalesce sop dop (l, g) =
+    if not (Lva.G.mem_edge g (S.ST.find sop l) (S.ST.find dop l)) then
+      let sneighs = S.ST.find sop l |> Lva.G.succ g |> Lva.VS.of_list
+      and dneighs = S.ST.find dop l |> Lva.G.succ g |> Lva.VS.of_list in
+      let neighs = Lva.VS.union sneighs dneighs in
+      let sign v = Lva.G.succ g v |> List.length >= k in
+      let signeighs = Lva.VS.filter sign neighs in
+      if Lva.VS.cardinal signeighs < k then
+        coalesce (S.ST.find sop l) (S.ST.find dop l) (l, g)
+      else (l, g)
+    else (l, g)
+  in
+  let try_pref sop dops (l, g) = S.SS.fold (try_coalesce sop) dops (l, g) in
+  S.ST.fold try_pref prefs (l, g)
+  \end{minted}
+  \caption{Implementation of \texttt{coalesce\_briggs} in \texttt{lib/coalesce.ml}}\label{fig:coalesce_briggs.ml}
+\end{figure}
+\noindent For every preference edge, attempt to coalesce them into one. The \texttt{try\_coalesce} function is applied to every pair \((a,b)\) for all \(\Phi\text{-nodes}\).
+At first whether \(a\) and \(b\) are in conflict is checked, because only nodes that are not in interference may be coalesced, and if they are there is no point in finding their neighbors.
+The degree of potential node \(ab\) is taking all of the neighbors  of \(a\) and \(b\), and if the union of these is of magnitude \(\geq k\) it doesn't satisfy the Briggs criteria and no further action is taken. If it is \(<k\), i.e. node \(ab\) is of insignificant degree, the two are combined in the \texttt{coalesce} function.
+
+
 %. You don't need to note down information about blocks etc.
 
 %Strictly speaking, one could optimize many more mov instructions away if 
+
+The following is a very tedious implementation, stemming from the the \texttt{ocamlgraph} library simply doesn't support contracting a graph. Instead one is directed towards constructing a new graph and copying over the vertices and edges in that order. This is done by first folding over all existing vertices,  adding the one's that are not in the process of being coalesced, and when the first of the pair being coalesced is met, set the third tuple entry to be some, the associated data being the vertex identifier as well as it's associated symbols. Each vertex maps to a symbol set (i.e. \texttt{S.SS.t}) of variables already coalesced which is initially a singleton.
+
+
+\begin{figure}[H]
+  \centering
+  \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let coalesce v1 v2 (st, g) =
+  if v1 = v2 then (st, g)
+  else
+    let g' = Lva.G.create () in
+    let st', vt', _ =
+      Lva.G.fold_vertex
+        (fun v (st, vt, jn) ->
+          if v = v1 || v = v2 then (
+            match jn with
+            | None ->
+                let s = Lva.G.V.label v in
+                (st, vt, Some (v, s))
+            | Some (v1, s1) ->
+                let s' = Lva.G.V.label v |> S.SS.union s1 in
+                let v' = Lva.G.V.create s' in
+                Lva.G.add_vertex g' v';
+                ( S.SS.fold (fun e l -> S.ST.add e v' l) s' st,
+                  Lva.VT.add v1 v' vt |> Lva.VT.add v v',
+                  None ))
+          else
+            let s = Lva.G.V.label v in
+            let v' = Lva.G.V.create s in
+            Lva.G.add_vertex g' v';
+            ( S.SS.fold (fun e st -> S.ST.add e v' st) s st,
+              Lva.VT.add v v' vt,
+              jn ))
+        g
+        (S.ST.empty, Lva.VT.empty, None)
+    in
+    Lva.G.iter_edges
+      (fun v1 v2 ->
+        let v1 = Lva.VT.find v1 vt' in
+        let v2 = Lva.VT.find v2 vt' in
+        if v1 <> v2 then Lva.G.add_edge g' v1 v2)
+      g;
+    (st', g')
+  \end{minted}
+  \caption{Implementation of \texttt{coalesce} in \texttt{lib/coalesce.ml}}\label{fig:coalesce.ml}
+\end{figure}
 
 
 
@@ -1411,7 +1514,7 @@ let linearscan k insns =
 
 %The intermediate representation emitted by the frontend of a compiler serves as a stepping stone independent of the target architecture. The \lstinline!LLVM! infrastructure is the industry standard in terms of bridging this gap and was consequently the library used to translate the semantically annotated abstract syntax tree to executable machine code in the 2022 compilers course. As this project is an expansion on this, it follows naturally to build on this. 
 
-The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as, for instance, neither of the languages implemented support exception handling, floating point operations and so on, and instead only strive to cover the basics of compilers.
+The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as, for instance, neither of the languages implemented support interrupts, floating point operations and so on, and instead only strive to cover the basics of compilers.
 
 Some additional instructions are included, like \lstinline!trunc! and \lstinline!switch!, to widen the range of supported frontend languages with the clang compiler.
 %been added in order to help cover more generated LLVM. % FIXME
@@ -1712,7 +1815,7 @@ The test suite is quite extensive although not anywhere close to complete covera
 Some tests have been handwritten during development, mostly meant to assert one specific feature (unit tests), but others are also inteded to assert them working together (integration tests). Some of them are hand written (simple ones), others are based on the output of \texttt{clang -S -emit-llvm} stripped with the the strip utility in \texttt{bin/strip.ml}, and lastly some are generated with Python scripts to parameterize certain properties (e.g. long move-chains, many operations). In addition to this some are copied from other projects
 In addition to my own cases and other programs from the internet (attributed in the file header), some cases from the LLVM test suite are also used. The structure of the test suite repository has a directory of so-called 'single source' C programs totalling to 2113. Of these only 1222 compiled successfully with \texttt{clang -S -emit-llvm} and of these only 624 parsed sucessfuly with the strip utility, of which 425 compiled successfully. In addition to these there are also the test suite used throughout Tiger development, most of which were provided by the compilers lecturers, as well as some LLVM snippets from the Dolphin compiler.
 
-The testing framework is roughly based on the build system that came with the Tiger work environment. It is based on a collection of files that can be compiled and executed on their own. Each of these are enumerated in the test runner (\texttt{bin/testrunner.ml}) with parameters associated.   Each of these are then compiled with the \texttt{clang} compiler and executed, capturing all the relevant output data, which is stdout and exit code. After this, the same test file is compiled for each of the allocators. The executables generated are then also executed, also storing the output data.   All test cases are deterministic and will halt at some point. This is necessary because tests can easily end in an infinite loop because of erroneous translation. As each of these halt or time out, their output is compared to what was output from executables generated by the 'correct' compiler of \texttt{clang}.
+The testing framework is roughly based on the build system that came with the Tiger development environment. It is based on a collection of files that can be compiled and executed on their own. Each of these are enumerated in the test runner (\texttt{bin/testrunner.ml}) with parameters associated.   Each of these are then compiled with the \texttt{clang} compiler and executed, capturing all the relevant output, which is stdout and exit code. After this, the same test file is compiled for each of the allocators. The executables generated are then also executed, also storing the output data.   All test cases are deterministic and will be  halted by configurable timeout at some point. This is necessary because tests can easily end in an infinite loop because of erroneous translation. As each of these halt or time out, their output is compared to what was output from executables generated by the 'correct' compiler of \texttt{clang}.
 
 % find ./SingleSource -name '*.c' -exec clang --target=x86_64-unknown-darwin -S -emit-llvm {} \;
 
