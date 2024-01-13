@@ -1244,9 +1244,7 @@ let coalesce v1 v2 (st, g) =
 Another approach that depends on liveness analysis is the linear scan algorithm.
 It is a simple and efficient approach that performs a linear pass over IR to produce a register assignment significantly faster than the steps involved with graph coloring.
 That said, it may generate more imprecise assignments and therefore also be less performant at runtime, so the utility of such an approach depends on the context in which it is used.
-While compilers like clang translate to machine code ahead-of-time (AOT), languages like C\# and Java will often rely on just-in-time (JIT) compilation to translate their respective VM instructions to native machine code,
-
-Such VMs that depend on JIT will often defer compilation to runtime. This is done for a myriad of reasons, portability and security among them, but usually at the cost of runtime performance. One of the reasons for this can be attributed to the way in which registers are allocated, as a significant downside of JIT is the fact it needs to be compiled in full before execution can begin. Therefore, generally a faster class of allocators is employed, linear scan being one of them, as linear scan is a reasonably performant alternative to graph coloring, that may be used to achieve reasonably efficient register assignments at runtime.
+While compilers like clang translate to machine code ahead-of-time (AOT), languages like C\# and Java will often rely on just-in-time (JIT) compilation to translate their respective VM instructions to native machine code. Such VMs that depend on JIT will often defer compilation to runtime. This is done for a myriad of reasons, portability and security among them, but usually at the cost of runtime performance. One of the reasons for this can be attributed to the way in which registers are allocated, as a significant downside of JIT is the fact it needs to be compiled in full before execution can begin. Therefore, generally a faster class of allocators is employed, linear scan being one of them, as linear scan is a reasonably performant alternative to graph coloring, that may be used to achieve reasonably efficient register assignments at runtime.
 %Whether or not to  a cost depends on the context, as JIT compilation will often 
 %reduced compile-time in  the fact that assignment is fast is a benefit in some cases.
 
@@ -1254,53 +1252,7 @@ The primary text is \textit{Linear Scan Register Allocation} \cite{linear}, the 
 Similar to graph coloring, given \(k\) available GPRs, it assigns  as many variables as possible, and spills the rest.
 
 It does this by first building the intervals using the \(\mathit{in}[s]\) and \(\mathit{out}[s]\) resulting from prior dataflow analysis.
-This can be done in a single pass with some creative array indexing, but my approach relies on two passes: one for finding the start points (see Figure \ref{fig:livenessstarts.ml}), the other for finding the end points.
-
-\begin{figure}[H]
-  \centering
-   \begin{minipage}[b]{0.88\textwidth}
-     \centering
-     \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
-let add e = function
-  | Some s -> Some (S.SS.add e s)
-  | None -> Some (S.SS.singleton e)
-
-let intervalstart insns (in_, out) =
-  let insn (ordstarts, starts, active) (i, _n) =
-    let out' = S.SS.diff (S.SS.union in_.(i) out.(i)) active in
-    ( S.SS.fold (fun e a -> IT.update i (add e) a) out' ordstarts,
-      S.SS.fold (fun e a -> S.ST.add e i a) out' starts,
-      S.SS.union active out' )
-  in
-  List.fold_left insn (IT.empty, S.ST.empty, S.SS.empty) insns
-     \end{minted}
-     \caption{Implementation of \texttt{intervalstart} in \texttt{lib/linear.ml}}\label{fig:livenessstarts.ml}
-   \end{minipage}
-\end{figure}
-
-\noindent Of note are the structures over which the folding is done: the \texttt{IT.t} is a \texttt{Map.S} module indexing earlier described symbol sets (i.e. \texttt{S.SS.t}). The reason for doing this is to iterate through intervals in increasing and decreasing order of start/length and end points respectively. The symbol table (\texttt{S.ST.t}) is to allow for reverse lookup, i.e. which program point variable \(s\) is defined, and lastly the symbol set (i.e. \texttt{S.SS.t}) which is just there to prevent multiple start points for the same variable.
-
-
-\begin{figure}[H]
-  \centering
-   \begin{minipage}[b]{0.95\textwidth}
-     \centering
-     \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
-let intervalends insns (in_, out) =
-  let insn (i, _n) (ordends, ends, active) =
-    let in' = S.SS.diff (S.SS.union in_.(i) out.(i)) active in
-    ( S.SS.fold (fun e a -> IT.update i (add e) a) in' ordends,
-      S.SS.fold (fun e a -> S.ST.add e i a) in' ends,
-      S.SS.union active in' )
-  in
-  List.fold_right insn insns (IT.empty, S.ST.empty, S.SS.empty)
-     \end{minted}
-     \caption{Implementation of \texttt{intervalendsintervalstart} in \texttt{lib/linear.ml}}\label{fig:intervalends.ml}
-   \end{minipage}
-\end{figure}
-
-
-\noindent The opposite is quite similar (see Figure \ref{fig:intervalends.ml}), with the only real difference being the use of \texttt{List.fold\_right} instead of \texttt{List.fold\_left} to reduce the function body in reverse.
+By keeping a list of active variables, on reaching the beginning of a new interval whith \(lk\) variables already actuve, one of them need to be spilled such that the starting interval can be assigned a register. It could be chosen at random but that could be costly, instead some spilling heuristic is applied.
 
 
 
@@ -1365,6 +1317,56 @@ define i32 @main (i32 %0, i8* %1) {
    \end{minipage}
 \end{figure}
 
+\subsection{Implementation}
+
+At first, intervals are derived from the flattened instruction sequence and associated \(\mathit{in}[n]\) and \(\mathit{out}[n]\) sets. 
+%spilling heuristic can vary, but the one mentioned in the paper is chosen from remaining length, as in  \textit{\textquoteleft furthest away from the current point\textquoteright} \cite[900]{linear}. The same decision was made for this implementation, as it does stand to reduce the amount of spills necessary. See The program of Figure \ref{fig:linear.ll} and its associated live ranges/intervals of Figure \ref{fig:linear.lra}. For a target of \(k=2\), upon reaching the start of interval \texttt{\%5},  one variable needs to be spilled. If either \texttt{\%3} or \texttt{\%4} are chosen, in the case of \texttt{\%3} being spilled, already upon reaching \texttt{\%7} another needs to be spilled. In case of \texttt{\%4}, two variables won't be live simultaneously until \texttt{\%8}. Nonetheless, that means two spills instead of spilling the longest interval of \texttt{\%5}.
+While this can be done in a single pass with some creative array indexing, but my approach relies on two passes: one for finding the start points (see Figure \ref{fig:livenessstarts.ml}), the other for finding the end points.
+
+\begin{figure}[H]
+  \centering
+   \begin{minipage}[b]{0.88\textwidth}
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let add e = function
+  | Some s -> Some (S.SS.add e s)
+  | None -> Some (S.SS.singleton e)
+let intervalstart insns (in_, out) =
+  let insn (ordstarts, starts, active) (i, _n) =
+    let out' = S.SS.diff (S.SS.union in_.(i) out.(i)) active in
+    ( S.SS.fold (fun e a -> IT.update i (add e) a) out' ordstarts,
+      S.SS.fold (fun e a -> S.ST.add e i a) out' starts,
+      S.SS.union active out' )
+  in
+  List.fold_left insn (IT.empty, S.ST.empty, S.SS.empty) insns
+     \end{minted}
+     \caption{Implementation of \texttt{intervalstart} in \texttt{lib/linear.ml}}\label{fig:livenessstarts.ml}
+   \end{minipage}
+\end{figure}
+
+\noindent Of note are the structures over which the folding is done: the \texttt{IT.t} is a \texttt{Map.S} module indexing earlier described symbol sets (i.e. \texttt{S.SS.t}). The reason for doing this is to iterate through intervals in increasing and decreasing order of start/length and end points respectively. The symbol table (\texttt{S.ST.t}) is to allow for reverse lookup, i.e. which program point variable \(s\) is defined, and lastly the symbol set (i.e. \texttt{S.SS.t}) which is just there to prevent multiple start points for the same variable.
+
+
+\begin{figure}[H]
+  \centering
+   \begin{minipage}[b]{0.95\textwidth}
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let intervalends insns (in_, out) =
+  let insn (i, _n) (ordends, ends, active) =
+    let in' = S.SS.diff (S.SS.union in_.(i) out.(i)) active in
+    ( S.SS.fold (fun e a -> IT.update i (add e) a) in' ordends,
+      S.SS.fold (fun e a -> S.ST.add e i a) in' ends,
+      S.SS.union active in' )
+  in
+  List.fold_right insn insns (IT.empty, S.ST.empty, S.SS.empty)
+     \end{minted}
+     \caption{Implementation of \texttt{intervalendsintervalstart} in \texttt{lib/linear.ml}}\label{fig:intervalends.ml}
+   \end{minipage}
+\end{figure}
+
+
+\noindent The opposite is quite similar (see Figure \ref{fig:intervalends.ml}), with the only real difference being the use of \texttt{List.fold\_right} instead of \texttt{List.fold\_left} to reduce the function body in reverse.
 
 
 \begin{figure}[H]
@@ -1389,7 +1391,7 @@ let intervals insns (in_, out) =
      \caption{Implementation of \texttt{intervals} in \texttt{linear.ml}}\label{fig:intervals-ocaml}
 \end{figure}
 
-\noindent The array indexing is used in the inner functions of \texttt{init} and \texttt{end\_} to unset the last point at which an interval goes out of scope.
+\noindent The array indexing is used in the inner functions of \texttt{init} and \texttt{end\_} to unset the last point at which an interval goes out of scope and are defined in Figure \ref{fig:init-ocaml} and \ref{fig:end_-ocaml} respectively.
 
 \begin{figure}[H]
      \centering
