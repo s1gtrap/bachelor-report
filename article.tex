@@ -1306,7 +1306,8 @@ let intervalends insns (in_, out) =
 
 %as can be seen in Figure \ref{fig:intervals-ocaml}.
 
-\subsection{Heuristics spilling}
+\subsection{Spilling heuristics}
+The spilling heuristic can vary, but the one mentioned in the paper is chosen from remaining length, as in  \textit{\textquoteleft furthest away from the current point\textquoteright} \cite[900]{linear}. The same decision was made for this implementation, as it does stand to reduce the amount of spills necessary. See The program of Figure \ref{fig:linear.ll} and its associated live ranges/intervals of Figure \ref{fig:linear.lra}. For a target of \(k=2\), upon reaching the start of interval \texttt{\%5},  one variable needs to be spilled. If either \texttt{\%3} or \texttt{\%4} are chosen, in the case of \texttt{\%3} being spilled, already upon reaching \texttt{\%7} another needs to be spilled. In case of \texttt{\%4}, two variables won't be live simultaneously until \texttt{\%8}. Nonetheless, that means two spills instead of spilling the longest interval of \texttt{\%5}.
 \usetikzlibrary{chains,arrows}
 \begin{figure}[H]
     \centering
