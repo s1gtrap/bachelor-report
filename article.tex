@@ -1822,12 +1822,6 @@ The testing framework is roughly based on the build system that came with the Ti
 
 % TODO: kommenter på stripper
 
-\subsubsection{Debugger Harness}
-A more elaborate way of testing correctness of translation is to assert that there are no effects except for those intended. One way of achieving this is to check if a group of x86 instructions representing a single LLVM-{}- operation change any values except those expected. An approach to this is to attach a debugger, insert a breakpoint before every LLVM-{}- instruction, and ensure that only the intended registers are altered.
-
-To achieve this, only a few changes need to be made to the codebase. A debug flag is introduced, which inserts a label before every instruction by adding a \lstinline!Breakpoint! variant of the \lstinline!ins! type before the assembly emitted of that specific operation. A unique identifier as well as a list of changes expected to be made is encoded. 
-This includes a bitmask of GPRs that can possibly be changed (aside from the scratch registers of course) as well as which parts of the stack may be modified. % TODO: implement the stack checker
-In addition to this, each of the labels are output with a \lstinline!.globl! directive in the file header. A file is built with these extra symbols using the \lstinline!-d! flag.
 
 %To validate that this works as intended, 
 
