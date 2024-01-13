@@ -796,7 +796,7 @@ let vert g e t =
       G.add_vertex g v;
       (v, S.ST.add e v t)
 \end{minted}
-Then the interference graph is derived in Figure \ref{fig:interf}. First, all parameters are connected, then the instructions are processed according to the book.
+Then the interference graph is derived in Figure \ref{fig:interf}. First, all parameters are connected, then the instructions are processed as described in the Appel text \cite[222]{tiger}: phi nodes, as they are the only \texttt{mov} instructions, interference edges are added with all  \(\mathit{out}[n] \setminus \{b_1, ..., b_n\}\) (see \eqref{phi}) while all others are just \(\mathit{out}[n]\).
 
 \begin{figure}[H]
 \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
@@ -817,9 +817,17 @@ let interf (params : Ll.uid list) (insns : Cfg.insn list) _ (out : S.SS.t array)
   let t = List.fold_left param t params in
   let setverts t s = S.SS.fold vert3 s t in
   let t = List.map (def S.SS.empty) insns |> List.fold_left setverts t in
+  let ids = function Ll.Id id -> Some id | _ -> None in
   let defoutedges t (i, n) =
     let defs = def S.SS.empty n in
-    let outedge e1 t = S.SS.fold (edge e1) out.(i) t in
+    let out =
+      match n with
+      | Cfg.Insn (_, Ll.PhiNode (_, ops)) ->
+          List.map fst ops |> List.filter_map ids |> S.SS.of_list
+          |> S.SS.diff out.(i)
+      | _ -> out.(i)
+    in
+    let outedge e1 t = S.SS.fold (edge e1) out t in
     S.SS.fold outedge defs t
   in
   let t = List.mapi (fun i n -> (i, n)) insns |> List.fold_left defoutedges t in
@@ -1592,8 +1600,9 @@ zext     & movx \%src, \%dst & \{\}\\
 
 \subsubsection{Implementing \mintinline{llvm}{call} instructions} \label{impl-call}
 
-The \mintinline{llvm}{call} operation is by far the most complicated one. Mostly because of calling conventions,
-The \texttt{\%rax} register is zeroed before every call as its lowermost byte register \texttt{\%al} is used to indicate the number of variadic arguments \cite[25]{sysv}.
+The \mintinline{llvm}{call} operation is by far the most complicated one. Mostly because of calling conventions, caller saved registers listed in Table \ref{tab:trans} need to be saved/restored before/after all. This isn't necessary in all cases, only the cases where they are actually used (which ought to be a simple lookup in the assignments table), but is not accounted for in this implementation. Instead they are all saved/restored regardless of use this could also be further optimized by simply subtracting from \texttt{\%rsp} and moving them to their respective stack locations manually,  instead of using push/pop.
+Additionally, the \texttt{\%rax} register is zeroed before every call as its lowermost byte register \texttt{\%al} is used to indicate the number of variadic arguments \cite[25]{sysv}. This isn't actually accounted for, instead it is just set to zero regardless.
+Furthermore, the way in which arguments are passed is also unnecessarily convoluted, but stems from a corner case in which variables were overwritten by moving to the respective register of the \(n\) function argument. This can be remedied by ordering the \texttt{mov}s correctly, and even in the case where there are cycles and \texttt{mov}s cannot be made without overwriting, one of the scratch registers can be used instead. But as a workaround for this, the arguments are simply pushed from the source operands and popped to their respective argument registers (in reverse order).
 
 \subsubsection{Implementing \mintinline{llvm}{getelementptr} instructions}\label{impl-gep}
 GEP instructions are used to perform address calculations for accessing elements in  structures or arrays. They are particularly useful for efficiently addressing elements in complex data structures. For example, code accessing fields like line 8 in Figure \ref{fig:vector.c}, would  translate to the snippet seen in Figure \ref{fig:vector.ll}.
@@ -1799,6 +1808,10 @@ Some tests have been handwritten during development, mostly meant to assert one 
 In addition to my own cases and other programs from the internet (attributed in the file header), some cases from the LLVM test suite are also used. The structure of the test suite repository has a directory of so-called 'single source' C programs totalling to 2113. Of these only 1222 compiled successfully with \texttt{clang -S -emit-llvm} and of these only 624 parsed sucessfuly with the strip utility, of which 425 compiled successfully. In addition to these there are also the test suite used throughout Tiger development, most of which were provided by the compilers lecturers, as well as some LLVM snippets from the Dolphin compiler.
 
 The testing framework is roughly based on the build system that came with the Tiger development environment. It is based on a collection of files that can be compiled and executed on their own. Each of these are enumerated in the test runner (\texttt{bin/testrunner.ml}) with parameters associated.   Each of these are then compiled with the \texttt{clang} compiler and executed, capturing all the relevant output, which is stdout and exit code. After this, the same test file is compiled for each of the allocators. The executables generated are then also executed, also storing the output data.   All test cases are deterministic and will be  halted by configurable timeout at some point. This is necessary because tests can easily end in an infinite loop because of erroneous translation. As each of these halt or time out, their output is compared to what was output from executables generated by the 'correct' compiler of \texttt{clang}.
+Though testing the outputs of several stages much like the Tiger compiler from the compilers course, this wasn't realized in time.
+All of the test entries in \texttt{bin/testrunner.ml} were either working at one point and the result of a regression or it was a work in progress that wasn't realized in time either. Except the \~ 20\% of the LLVM test suite that were never working.
+
+
 
 % find ./SingleSource -name '*.c' -exec clang --target=x86_64-unknown-darwin -S -emit-llvm {} \;
 
@@ -1844,7 +1857,9 @@ Although realistically this will never happen in a lifetime, across \(n\) runs t
 
 Measurements are made with the \lstinline!perf! utility, which relies on the \textit{hardware counters} (HC) registers of modern microprocessors, which are special purpose registers meant to record performance data during execution. Because the analysis is integrated into the chip on which it is executing, very little overhead is incurred, and is therefore the go-to for estimating native performance on Linux. The \lstinline!perf! subcommand is used, as it starts a process and attaches from the very beginning, in addition to padding a \lstinline!-e! flag specifying that only cycles are meant to be recorded and the \lstinline!-x! flag to help parse the output. Both min, avg and max are tracked and reported but only min are represented in the matrices below.
 
-Each \lstinline!.ll! file present in the \lstinline!benches! directory is listed here in a table denoting the input paramater on the left column and type of allocator used.
+Some of the \texttt{.ll} file present in the \texttt{benches} directory are listed here in a table denoting the input paramater on the left column and type of allocator used.
+The data measured is extracted from the \texttt{perf} as mentioned above. This is done in \texttt{bin/bench.ml} which also contains the commands and parameters to execute each benchmark.
+
 
 %% NOTE: måske noget om hvordan intel laver sin egen arkitektur?
 
