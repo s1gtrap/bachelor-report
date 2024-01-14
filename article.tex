@@ -1862,7 +1862,7 @@ It is difficult to assert the correctness of a compiler. While writing simple un
 
 Validating the correctness of each instruction translation is a complicated task given how low-level it is. One approach is attaching a debugger and examining the state before and after the translated sequence of x86 instructions is executed. The result of applying a binary operation,  for instance, should only affect the assigned register. Another is an extensive test suite, although achieving 100\% coverage is unrealistic.
 
-\subsection{Test Suite and  Framework}
+\subsection{Test suite/framework}
 
 The test suite is quite extensive although not anywhere close to complete coverage.
 Some tests have been handwritten during development, mostly meant to assert one specific feature (unit tests), but others are also inteded to assert them working together (integration tests). Some of them are hand written (simple ones), others are based on the output of \texttt{clang -S -emit-llvm} stripped with the the strip utility in \texttt{bin/strip.ml}, and lastly some are generated with Python scripts to parameterize certain properties (e.g. long move-chains, many operations). In addition to this some are copied from other projects
@@ -1872,7 +1872,15 @@ The testing framework is roughly based on the build system that came with the Ti
 Though testing the outputs of several stages much like the Tiger compiler from the compilers course, this wasn't realized in time.
 All of the test entries in \texttt{bin/testrunner.ml} were either working at one point and the result of a regression or it was a work in progress that wasn't realized in time either. Except the \~ 20\% of the LLVM test suite that were never working.
 
+\subsubsection{Debug Harness}
 
+A more elaborate way of asserting correctness of translation is to assert that there are no effects except for those intended. One way of achieving this is to check if a sequence of x86 instructions representing a single LLVM-{}- operation change any values except those expected.  An approach to this is to insert a breakpoint before every LLVM-{}- instruction, then attach a debugger that breaks on these,  and ensure that only the intended registers are altered.
+
+To achieve this, only a few changes need to be made to the codebase. A debug flag is introduced, which inserts a label before every instruction by adding a \lstinline!Breakpoint! variant of the \lstinline!ins! type before the assembly emitted of that specific operation. A unique identifier as well as a list of changes expected to be made is encoded. 
+This includes a bitmask of GPRs that can possibly be changed (aside from the scratch registers of course) as well as which parts of the stack may be modified. % TODO: implement the stack checker
+In addition to this, each of the labels are output with a \lstinline!.globl! directive in the file header. A file is built with these extra symbols using the \lstinline!-d! flag.
+
+Unfortunately, this was never made to work in practice, but the \texttt{harness.py} script is attached regardless. It was made and tested with \texttt{clang16} in mind on Linux.
 
 % find ./SingleSource -name '*.c' -exec clang --target=x86_64-unknown-darwin -S -emit-llvm {} \;
 
@@ -2346,7 +2354,9 @@ arg(s) & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear 12 & linea
 
 \subsubsection{\lstinline!benches/fannkuch-redux.ll!}
 
-Fannkuch-redux involves a permutation algorithm that has a non-trivial algorithmic complexity. It requires both recursion and iterative processes, making it a good test for a language's ability to handle complex computations efficiently.
+Fannkuch-redux involves a permutation algorithm that has a non-trivial algorithmic complexity. %It requires both recursion and iterative processes, making it a good test for a language's ability to handle complex computations efficiently.
+It stems from the Benchmarks game 
+It was made for the Debian benchmarks game 
 The fannkuch algorithm is 
 
 \begin{table}[H]
