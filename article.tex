@@ -134,7 +134,9 @@ cbox/.style={draw,
 
 \font\myfont=cmr12 at 24pt
 \title{\myfont Implementation and evaluation of register allocation for translating LLVM-{}- to x86-64}
-\author{William Welle Tange, 201809080}
+\author{William Welle Tange -- 201809080\\
+  Advisors: Aslan Askarov \& Amin Timany
+}
 
 \pagenumbering{roman}
 
@@ -151,8 +153,8 @@ cbox/.style={draw,
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Tellus at urna condimentum mattis. Enim facilisis gravida neque convallis. Enim facilisis gravida neque convallis a cras semper auctor. Vitae proin sagittis nisl rhoncus mattis rhoncus urna neque. Justo nec ultrices dui sapien eget mi proin. Id aliquet risus feugiat in ante. A cras semper auctor neque vitae tempus quam pellentesque nec. Nulla porttitor massa id neque aliquam vestibulum morbi. Facilisi cras fermentum odio eu. Odio pellentesque diam volutpat commodo sed egestas egestas fringilla. Amet consectetur adipiscing elit duis tristique sollicitudin nibh sit amet. Adipiscing at in tellus integer feugiat. A pellentesque sit amet porttitor. Sed elementum tempus egestas sed sed risus pretium quam. Quam viverra orci sagittis eu volutpat odio facilisis mauris sit. Arcu dictum varius duis at. Sociis natoque penatibus et magnis dis parturient montes. Varius sit amet mattis vulputate enim nulla aliquet. Ac ut consequat semper viverra. Scelerisque eleifend donec pretium vulputate sapien nec. Orci ac auctor augue mauris augue. Pulvinar mattis nunc sed blandit. Semper auctor neque vitae tempus quam pellentesque nec nam. Risus pretium quam vulputate dignissim. Dui faucibus in ornare quam viverra orci sagittis eu volutpat. Ac tortor vitae purus faucibus. Eu mi bibendum neque egestas congue quisque egestas diam in. Curabitur vitae nunc sed velit dignissim sodales ut eu sem. Arcu odio ut sem nulla.
 
 \section*{Acknowledgments}
-I would like to express my gratitude and thanks towards all who have facilitated me in making this project a part of reality.
-First of all, I can hardly begin to express my gratitude towards my advisors Aslan and Amin for the weekly meetings where most if not all of my confusion was settled.
+I would like to express my sincere gratitude and thanks to all who have supported me in making this project a part of reality.
+First of all, I can hardly begin to express my gratitude towards my advisors Aslan and Amin for the weekly meetings where most if not all concerns were settled.
 %Firstly, we would like to thank Bas Spitters, our supervisor, for his guidance and expertise on the subject, as
 %well as giving us the idea for the project. Without him this project would not have been possible. Secondly,
 %we thank Franziskus Kiefer for his helpfulness in answering questions about various Hacspec-related quirks,
@@ -1718,7 +1720,7 @@ of transferring to \texttt{\_main\$9} if the zero flag indeed is set. If not, ex
 As \texttt{mov} operations do not change the \texttt{FLAGS} register \cite{x86asm}, having \texttt{mov} instructions between the branching instructions of \texttt{je} and \texttt{jmp} do not affect the branching. Likewise, because of the \(\mathit{use}[n]\) semantics of \(\Phi\)-functions, all \(b_i\) are in interference in one another, so may not be overwritten by the \texttt{mov}s inserted.
 
 One particularly nasty oversight that was discovered a couple of days prior to handin stems from phi movs overwriting each other.
-Consider Figure \ref{fig:sqrt1.ll} where two phi instructions either move \texttt{\%6} to \texttt{label \%10} or \texttt{\%7} to \texttt{label \%5} depending on the condition. In some cases, even in greedy where each variable is assigned their own discrete register, their respective values are overwritten. This is due to \texttt{\%7} being moved to \texttt{\%6} prior to potentially branching back to \texttt{label \%5}. If phi moves are conducted unconditionally of branch condition \texttt{\%9}, the value of \texttt{\%6} prior to branching to \texttt{label \%10} is overwritten on the off-chance of returning to \texttt{label \%5}, causing the value assigned to \texttt{\%11} and returned on line 10 to always be equal to \texttt{\%7} instead of the intended \texttt{\%7} instead of the intended  \texttt{\%6}.
+Consider Figure \ref{fig:sqrt1.ll} where two phi instructions either move \texttt{\%6} to \texttt{label \%10} or \texttt{\%7} to \texttt{label \%5} depending on the condition. In some cases, even in greedy where each variable is assigned their own discrete register, their respective values are overwritten. This is due to \texttt{\%7} being moved to \texttt{\%6} prior to potentially branching back to \texttt{label \%5}. If phi moves are conducted unconditionally of branch condition \texttt{\%9}, the value of \texttt{\%6} prior to branching to \texttt{label \%10} is overwritten on the off-chance of returning to \texttt{label \%5}, causing the value assigned to \texttt{\%11} and returned on line 10 to always be equal to \texttt{\%7}   instead of the intended  \texttt{\%6}.
 
 
 \begin{figure}[H]
