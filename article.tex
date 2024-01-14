@@ -1291,6 +1291,8 @@ $ time dune exec build -- tests/sha256.ll -a linear
 38,72s user 0,04s system 99% cpu 38,813 total
 $ time dune exec build -- tests/sha256.ll -a simple
 120,55s user 0,07s system 99% cpu 2:00,74 total
+$ time dune exec build -- tests/sha256.ll -a briggs
+119,86s user 0,05s system 99% cpu 2:00,03 total
     \end{minted}
     \caption{Runtime over single runs of compilation}\label{fig:build-time}
   \end{minipage}
@@ -1609,7 +1611,7 @@ In contrast, the x86 \textit{instruction set architecture} (ISA) is targeting a 
 
 Another more concise example of this would be the division/remainder operation: since integer division is a non-trivial iterative process wherein both the quotient and remainder is needed throughout, the result of both of these is stored in the \texttt{\%rax} and \texttt{\%rdx} registers respectively. This means two operations are performed simultaneously regardless of which value is used, hence they need to be restored before executing the next instruction, as any variables assigned to \lstinline!%rax! or \lstinline!%rdx! will be overwritten.
 
-To map each LLVM-{}- instruction to what amounts to the 'core' function in x86, consider Table \ref{tab:trans}. Instructions for which the size varies, the suffix is denoted with \texttt{x} instead. This is then replaced with the appropriate size suffix depending on the size denoted in the LLVM-{}- instruction. For example, most binary operations move the left-hand operand into \texttt{\%rax} and the right-hand operand into  \texttt{\%rcx}, after which the associated instruction from the table is performed. For x86, most operations are done in place, so for the most part \texttt{\%rax} is modified and moved to the destination after.
+To map each LLVM-{}- instruction to what amounts to the 'core' function in x86, consider Table \ref{tab:trans}. Instructions for which the size varies, the suffix is denoted with \texttt{x} instead. This is then replaced with the appropriate size suffix depending on the type noted in the LLVM-{}- instruction. For example, most binary operations move the left-hand operand into \texttt{\%rax} and the right-hand operand into  \texttt{\%rcx}, after which the associated instruction from the table is performed. For x86, most operations are done in place, so for the most part \texttt{\%rax} is modified and moved to the destination after.
 
 \begin{table}[H]
   \centering
@@ -1633,7 +1635,7 @@ or       & orx \%src, \%dst & \{\}\\
 phi      & \textrm{\textit{see \ref{impl-phi}}} & \{\}\\
 ptrtoint & movx \%src, \%dst & \{\}\\
 sdiv     & idivx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
-select   & cmpx, cmoveq & \{\}\\
+select   & cmpx, cmoveq & \{\texttt{\%rFLAGS}\}\\
 sext     & movx \%src, \%dst & \{\}\\
 shl      & shl \%src, \%dst & \{\}\\
 srem     & idivx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
@@ -1867,6 +1869,12 @@ movq	-16(%rbp), %rax
 
 % FIXME: check if above is sound
 
+\subsubsection{Translating terminators} \label{impl-term}
+
+As for implementing terminators, the simplest is \texttt{unreachable}, as this literally doesn't evaluate to anything.  Next is \texttt{ret}, which is more involved, in that it needs to concern itself with calling conventions.
+Although these are fairly straight forward, expecially since functions generally apply the same operations in the prologue by pushing all callee-saved registers to the stack and then, occasionally, subctracting the amount of spilled variables from \texttt{\%rsp}.
+The function epilogue doesn't have to concern itself with the number of spiller variables though, as the stack pointer is saved to \texttt{\%rbp} and simply restored from that.
+The return value (if specified) is moved to the return register which is \texttt{\%rax} according to the System V AMD64 ABI \cite[26]{sysv}.
 
 %and concerning with which node was executed immediately before, this can be achieved by approaching the problem differently.
 
@@ -2405,7 +2413,7 @@ arg & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 &
 
 It goes without saying that there are countless optimizations waiting to be made, but as the goal of this project was to explore the different approaches not many regards were had for the instruction selection itself. In fact, much more concern was taken for making sure each instruction was translated such that no other live variables were affected. The call instruction alone is probably a whole order of magnitude slower tha nenceesary. Likewise, the function pre-/epilogue are also overly cautious.
 
-Certainly the selection of benchmarks could also have been broader, with the cast majority just showing how Greedy is considerably slower. Not to mention more benchmarks with support for the Tiger compiler that was written the year prior. Likewise, some more detailed profiling of the entire compilation would have been interesting. Some short descriptions of time taking during certain phases are included (see Figure \ref{fig:lva-time} and \ref{fig:build-time}) although a far more detailed report could've been made with instrumentation frameworks like Landmarks \cite{landmarks} as the time spent during compile time is quite significant, prticularly for JIT.
+Certainly the selection of benchmarks could also have been broader, with the cast majority just showing how Greedy is considerably slower. Not to mention more benchmarks with support for the Tiger compiler that was written the year prior. Likewise, some more detailed profiling of the entire compilation would have been interesting. Some short descriptions of time taking during certain phases are included (see Figure \ref{fig:lva-time} and \ref{fig:build-time}) although a far more detailed report could've been made with instrumentation frameworks like Landmarks \cite{landmarks} as the time spent during compile time is quite significant, prticularly for runtime environments that depend on JIT, but also for AOT compilers as long compile times can negatively affect productivity.
 
 The complexity of the liveness analysis phase could also be significantly improved, as 
 
