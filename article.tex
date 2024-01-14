@@ -1559,7 +1559,7 @@ let alloc k insns (in_, out) =
 
 %The intermediate representation emitted by the frontend of a compiler serves as a stepping stone independent of the target architecture. The \lstinline!LLVM! infrastructure is the industry standard in terms of bridging this gap and was consequently the library used to translate the semantically annotated abstract syntax tree to executable machine code in the 2022 compilers course. As this project is an expansion on this, it follows naturally to build on this. 
 
-The instruction set used in this paper will be a union of the sets used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as, for instance, neither of the languages implemented support interrupts, floating point operations etc., and instead only strive to cover the basics of compilers. In additional some other instructions are also included, like \lstinline!trunc! and \lstinline!switch!, to widen the range of supported frontend languages with the clang compiler.
+The instruction set used in this paper will be a combination of those used in the 2022 and 2023 compilers courses in order to work as a drop-in replacement of LLVM for either of the two respective source languages:  Tiger and Dolphin. This instruction set is a subset of the one used in practice, as, for instance, neither of the languages implemented support interrupts, floating point operations etc., and instead only strive to cover the basics of compilers. In additional some other instructions are also included, like \lstinline!trunc! and \lstinline!switch!, to widen the range of supported frontend languages with the clang compiler.
 %been added in order to help cover more generated LLVM. % FIXME
 %with only four distinct block terminators 
 %\begin{enumerate}
@@ -1947,7 +1947,7 @@ arg(s) & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 1
 \caption{\label{tab:dumb-fib}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
 \end{table}
 
-\noindent The measures in Table \ref{tab:dumb-fib}  are significantly equivalent to one another, with all allocators (except greedy 0) seeming to converge towards being 37\% slower than Clang. This isn't particularly surprising, as the x86 translation is more concerned with preserving callee saved registers than necessary in pushing each and every one despite not being in use. Also, instead of pushing with the \lstinline!push! instruction it would be faster to simply subtract from the \lstinline!%rsp! register directly and using \lstinline!mov! directly.
+\noindent The measures in Table \ref{tab:dumb-fib}  are remarkably similar to one another, with all allocators (except greedy 0) seeming to converge towards being 37\% slower than Clang. This isn't particularly surprising, as the x86 translation is more concerned with preserving callee saved registers than necessary in pushing each and every one despite not being in use. Also, instead of pushing with the \lstinline!push! instruction it would be faster to simply subtract from the \lstinline!%rsp! register directly and using \lstinline!mov! directly.
 
 What's more interesting and related to the allocation is the fact that greedy 0 is more than twice as slow. This is presumably because the \lstinline!fib! function that has 7 variables can assign each of them to a register for the first six allocators listed. However, the last one (greedy 0), has no assignable registers, so it must necessarily start spilling from the very beginning. To elucidate this hypothesis, the same benchmark was performed but only for the greedy of decreasing \(k\) assignable registers as well as the Tiger compiler which has the same approach to spilling every variable prematurely  and can be seen in Table \ref{tab:dumb-fib-greedy}:
 \begin{table}[H]
@@ -1984,6 +1984,27 @@ arg(s) & clang & greedy 12 & greedy 8 & greedy 6 & greedy 4 & greedy 2 & greedy 
 %TODO: bedøm om det giver mening
 
 
+
+\subsubsection{\lstinline!benches/factori32.ll!}
+
+Integer factorization is another interesting algorithm. Generally considered to be NP, here are the results of factorizing known primes of inreasing bit length. For \(n=1024\).
+\begin{table}[H]
+\makebox[\textwidth][c]{
+\begin{NiceTabular}{|c|ccccccccc|}
+\hline
+arg(s) & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear 12 & linear 2 & greedy 12 & greedy 0 \\
+\hline
+16777213 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 167130& \cellcolor[rgb]{0.759765625,0.9990234375,0.75} 1.04160x& \cellcolor[rgb]{0.7509765625,0.9990234375,0.75} 1.00651x& \cellcolor[rgb]{0.7626953125,0.9990234375,0.75} 1.05411x& \cellcolor[rgb]{0.7626953125,0.9990234375,0.75} 1.05372x& \cellcolor[rgb]{0.7607421875,0.9990234375,0.75} 1.04686x& \cellcolor[rgb]{0.958984375,0.9990234375,0.75} 1.84213x& \cellcolor[rgb]{0.9990234375,0.98828125,0.75} 2.33215x& \cellcolor[rgb]{0.9990234375,0.9873046875,0.75} 2.34511x\\
+33554393 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 175409& \cellcolor[rgb]{0.7646484375,0.9990234375,0.75} 1.06219x& \cellcolor[rgb]{0.7646484375,0.9990234375,0.75} 1.06070x& \cellcolor[rgb]{0.765625,0.9990234375,0.75} 1.06415x& \cellcolor[rgb]{0.7646484375,0.9990234375,0.75} 1.06212x& \cellcolor[rgb]{0.7646484375,0.9990234375,0.75} 1.06039x& \cellcolor[rgb]{0.9990234375,0.9951171875,0.75} 2.12199x& \cellcolor[rgb]{0.9990234375,0.974609375,0.75} 2.78336x& \cellcolor[rgb]{0.9990234375,0.9736328125,0.75} 2.79956x\\
+67108859 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 185779& \cellcolor[rgb]{0.7685546875,0.9990234375,0.75} 1.07588x& \cellcolor[rgb]{0.76953125,0.9990234375,0.75} 1.07923x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08373x& \cellcolor[rgb]{0.76953125,0.9990234375,0.75} 1.08043x& \cellcolor[rgb]{0.76953125,0.9990234375,0.75} 1.07895x& \cellcolor[rgb]{0.9990234375,0.9833984375,0.75} 2.49571x& \cellcolor[rgb]{0.9990234375,0.955078125,0.75} 3.38089x& \cellcolor[rgb]{0.9990234375,0.955078125,0.75} 3.40121x\\
+134217689 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 197302& \cellcolor[rgb]{0.7802734375,0.9990234375,0.75} 1.12173x& \cellcolor[rgb]{0.775390625,0.9990234375,0.75} 1.10225x& \cellcolor[rgb]{0.779296875,0.9990234375,0.75} 1.12120x& \cellcolor[rgb]{0.779296875,0.9990234375,0.75} 1.12080x& \cellcolor[rgb]{0.779296875,0.9990234375,0.75} 1.11794x& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 3.00248x& \cellcolor[rgb]{0.9990234375,0.9306640625,0.75} 4.17628x& \cellcolor[rgb]{0.9990234375,0.9296875,0.75} 4.20718x\\
+268435399 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 218313& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14571x& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14655x& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14531x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14376x& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14572x& \cellcolor[rgb]{0.9990234375,0.9501953125,0.75} 3.55232x& \cellcolor[rgb]{0.9990234375,0.9033203125,0.75} 5.06141x& \cellcolor[rgb]{0.9990234375,0.90234375,0.75} 5.08687x\\
+536870909 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 245682& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18408x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18299x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18404x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18194x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18307x& \cellcolor[rgb]{0.9990234375,0.9296875,0.75} 4.20818x& \cellcolor[rgb]{0.9990234375,0.8720703125,0.75} 6.06747x& \cellcolor[rgb]{0.9990234375,0.8701171875,0.75} 6.13899x\\
+1073741789 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 285913& \cellcolor[rgb]{0.8037109375,0.9990234375,0.75} 1.21667x& \cellcolor[rgb]{0.8037109375,0.9990234375,0.75} 1.21894x& \cellcolor[rgb]{0.8037109375,0.9990234375,0.75} 1.21755x& \cellcolor[rgb]{0.8037109375,0.9990234375,0.75} 1.21668x& \cellcolor[rgb]{0.8037109375,0.9990234375,0.75} 1.21706x& \cellcolor[rgb]{0.9990234375,0.908203125,0.75} 4.89647x& \cellcolor[rgb]{0.9990234375,0.8369140625,0.75} 7.20172x& \cellcolor[rgb]{0.9990234375,0.8359375,0.75} 7.23917x\\
+\hline
+\end{NiceTabular}}
+\caption{\label{tab:factori32}Benchmark of \texttt{benches/factori32.ll} output by \mintinline{bash}{dune exec bench -- -f factori32 -n 1000}}
+\end{table}
 
 
 \subsubsection{\lstinline!benches/phis.ll!}
@@ -2100,27 +2121,6 @@ n & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 & g
 
 
 
-
-\subsubsection{\lstinline!benches/factori32.ll!}
-
-Integer factorization is another interesting algorithm. Generally considered to be NP, here are the results of factorizing known primes of inreasing bit length. For \(n=1024\).
-\begin{table}[H]
-\makebox[\textwidth][c]{
-\begin{NiceTabular}{|c|ccccccccc|}
-\hline
-arg(s) & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear 12 & linear 2 & greedy 12 & greedy 0 \\
-\hline
-16777213 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 167130& \cellcolor[rgb]{0.759765625,0.9990234375,0.75} 1.04160x& \cellcolor[rgb]{0.7509765625,0.9990234375,0.75} 1.00651x& \cellcolor[rgb]{0.7626953125,0.9990234375,0.75} 1.05411x& \cellcolor[rgb]{0.7626953125,0.9990234375,0.75} 1.05372x& \cellcolor[rgb]{0.7607421875,0.9990234375,0.75} 1.04686x& \cellcolor[rgb]{0.958984375,0.9990234375,0.75} 1.84213x& \cellcolor[rgb]{0.9990234375,0.98828125,0.75} 2.33215x& \cellcolor[rgb]{0.9990234375,0.9873046875,0.75} 2.34511x\\
-33554393 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 175409& \cellcolor[rgb]{0.7646484375,0.9990234375,0.75} 1.06219x& \cellcolor[rgb]{0.7646484375,0.9990234375,0.75} 1.06070x& \cellcolor[rgb]{0.765625,0.9990234375,0.75} 1.06415x& \cellcolor[rgb]{0.7646484375,0.9990234375,0.75} 1.06212x& \cellcolor[rgb]{0.7646484375,0.9990234375,0.75} 1.06039x& \cellcolor[rgb]{0.9990234375,0.9951171875,0.75} 2.12199x& \cellcolor[rgb]{0.9990234375,0.974609375,0.75} 2.78336x& \cellcolor[rgb]{0.9990234375,0.9736328125,0.75} 2.79956x\\
-67108859 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 185779& \cellcolor[rgb]{0.7685546875,0.9990234375,0.75} 1.07588x& \cellcolor[rgb]{0.76953125,0.9990234375,0.75} 1.07923x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08373x& \cellcolor[rgb]{0.76953125,0.9990234375,0.75} 1.08043x& \cellcolor[rgb]{0.76953125,0.9990234375,0.75} 1.07895x& \cellcolor[rgb]{0.9990234375,0.9833984375,0.75} 2.49571x& \cellcolor[rgb]{0.9990234375,0.955078125,0.75} 3.38089x& \cellcolor[rgb]{0.9990234375,0.955078125,0.75} 3.40121x\\
-134217689 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 197302& \cellcolor[rgb]{0.7802734375,0.9990234375,0.75} 1.12173x& \cellcolor[rgb]{0.775390625,0.9990234375,0.75} 1.10225x& \cellcolor[rgb]{0.779296875,0.9990234375,0.75} 1.12120x& \cellcolor[rgb]{0.779296875,0.9990234375,0.75} 1.12080x& \cellcolor[rgb]{0.779296875,0.9990234375,0.75} 1.11794x& \cellcolor[rgb]{0.9990234375,0.9677734375,0.75} 3.00248x& \cellcolor[rgb]{0.9990234375,0.9306640625,0.75} 4.17628x& \cellcolor[rgb]{0.9990234375,0.9296875,0.75} 4.20718x\\
-268435399 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 218313& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14571x& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14655x& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14531x& \cellcolor[rgb]{0.78515625,0.9990234375,0.75} 1.14376x& \cellcolor[rgb]{0.7861328125,0.9990234375,0.75} 1.14572x& \cellcolor[rgb]{0.9990234375,0.9501953125,0.75} 3.55232x& \cellcolor[rgb]{0.9990234375,0.9033203125,0.75} 5.06141x& \cellcolor[rgb]{0.9990234375,0.90234375,0.75} 5.08687x\\
-536870909 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 245682& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18408x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18299x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18404x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18194x& \cellcolor[rgb]{0.794921875,0.9990234375,0.75} 1.18307x& \cellcolor[rgb]{0.9990234375,0.9296875,0.75} 4.20818x& \cellcolor[rgb]{0.9990234375,0.8720703125,0.75} 6.06747x& \cellcolor[rgb]{0.9990234375,0.8701171875,0.75} 6.13899x\\
-1073741789 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 285913& \cellcolor[rgb]{0.8037109375,0.9990234375,0.75} 1.21667x& \cellcolor[rgb]{0.8037109375,0.9990234375,0.75} 1.21894x& \cellcolor[rgb]{0.8037109375,0.9990234375,0.75} 1.21755x& \cellcolor[rgb]{0.8037109375,0.9990234375,0.75} 1.21668x& \cellcolor[rgb]{0.8037109375,0.9990234375,0.75} 1.21706x& \cellcolor[rgb]{0.9990234375,0.908203125,0.75} 4.89647x& \cellcolor[rgb]{0.9990234375,0.8369140625,0.75} 7.20172x& \cellcolor[rgb]{0.9990234375,0.8359375,0.75} 7.23917x\\
-\hline
-\end{NiceTabular}}
-\caption{\label{tab:factori32}Benchmark of \texttt{benches/fib.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
-\end{table}
 
 \subsubsection{\lstinline!benches/factori64.ll!}
 \begin{table}[H]
