@@ -1608,7 +1608,7 @@ ashr     & sarx \%src, \%dst & \{\}\\
 bitcast  & movx \%src, \%dst & \{\}\\
 call     & \textrm{\textit{see \ref{impl-call}}} & \{\texttt{\%rax}, \texttt{\%rcx}, \texttt{\%rdx}, \texttt{\%rsi}, \texttt{\%r8-\%r11}\}\\
 gep      & \textrm{\textit{see \ref{impl-gep}}} & \{\}\\
-icmp     & \textrm{\textit{see \ref{impl-cond}}} & \{\texttt{\%rFLAGS}\}\\
+icmp     & cmpx, set & \{\texttt{\%rFLAGS}\}\\
 load     & movx (\%src), \%dst & \{\}\\
 lshr     & shrx \%src, \%dst & \{\}\\
 mul      & imulx \%src, \%dst & \{\texttt{\%rax}\}\\
@@ -1616,7 +1616,7 @@ or       & orx \%src, \%dst & \{\}\\
 phi      & \textrm{\textit{see \ref{impl-phi}}} & \{\}\\
 ptrtoint & movx \%src, \%dst & \{\}\\
 sdiv     & idivx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
-select   &  & \{\}\\
+select   & cmpx, cmoveq & \{\}\\
 sext     & movx \%src, \%dst & \{\}\\
 shl      & shl \%src, \%dst & \{\}\\
 srem     & idivx \%src, \%dst & \{\texttt{\%rax}, \texttt{\%rdx}\}\\
@@ -1637,18 +1637,20 @@ zext     & movx \%src, \%dst & \{\}\\
 
 \subsubsection{Implementing \mintinline{llvm}{call} instructions} \label{impl-call}
 
-The \mintinline{llvm}{call} operation is by far the most complicated one. Mostly because of calling conventions, caller saved registers listed in Table \ref{tab:trans} need to be saved/restored before/after all. This isn't necessary in all cases, only the cases where they are actually used (which ought to be a simple lookup in the assignments table), but is not accounted for in this implementation. Instead they are all saved/restored regardless of use this could also be further optimized by simply subtracting from \texttt{\%rsp} and moving them to their respective stack locations manually,  instead of using push/pop.
+The \mintinline{llvm}{call} operation is by far the most complicated one. Mostly because of calling conventions, caller saved registers listed in Table \ref{tab:trans} need to be saved/restored before/after all. This isn't necessary in all functions, only those where the registers are  actually used (which ought to be a simple lookup in the assignments table), but is not accounted for in this implementation. Instead they are all saved/restored regardless of use this could also be further optimized by simply subtracting from \texttt{\%rsp} and moving them to their respective stack locations manually,  instead of using push/pop.
 Additionally, the \texttt{\%rax} register is zeroed before every call as its lowermost byte register \texttt{\%al} is used to indicate the number of variadic arguments \cite[25]{sysv}. This isn't actually accounted for, instead it is just set to zero regardless.
-Furthermore, the way in which arguments are passed is also unnecessarily convoluted, but stems from a corner case in which variables were overwritten by moving to the respective register of the \(n\) function argument. This can be remedied by ordering the \texttt{mov}s correctly, and even in the case where there are cycles and \texttt{mov}s cannot be made without overwriting, one of the scratch registers can be used instead. But as a workaround for this, the arguments are simply pushed from the source operands and popped to their respective argument registers (in reverse order).
+Furthermore, the way in which arguments are passed is also unnecessarily convoluted, but stems from a corner case in which variables were overwritten by moving to the respective register of the \(n\) function argument. This can be remedied by ordering the \texttt{mov}s correctly, and even in the case where there are cycles and \texttt{mov}s cannot be made without overwriting at least one, one of the scratch registers can be used instead. But as a workaround for this, the arguments are simply pushed from the source operands and popped to their respective argument registers (in reverse order).
 
 \subsubsection{Implementing \mintinline{llvm}{getelementptr} instructions}\label{impl-gep}
 GEP instructions are used to perform address calculations for accessing elements in  structures or arrays. They are particularly useful for efficiently addressing elements in complex data structures. For example, code accessing fields like line 8 in Figure \ref{fig:vector.c}, would  translate to the snippet seen in Figure \ref{fig:vector.ll}.
+
 
 \begin{figure}[H]
    \begin{minipage}{0.48\textwidth}
      \centering
      \begin{minted}[linenos,bgcolor=LightGray]{c}
 typedef struct {
+  char c;
   int x;
   int y;
 } vector;
@@ -1657,7 +1659,6 @@ void dot(vector *a, vector *b) {
   a->x += b->x;
   a->y += b->y;     // -------->
 }
-
      \end{minted}
      \caption{Subfield access}\label{fig:vector.c}
    \end{minipage}
@@ -1666,10 +1667,10 @@ void dot(vector *a, vector *b) {
      \begin{minted}[linenos,bgcolor=LightGray]{llvm}
 ; ...
 %6 = getelementptr %struct.vector,
-            %i8* %1, i64 0, i32 1
+            %i8* %1, i64 0, i32 2
 %7 = load i32, i32* %6
 %8 = getelementptr %struct.vector,
-            %i8* %0, i64 0, i32 1
+            %i8* %0, i64 0, i32 2
 %9 = load i32, i32* %8
 %10 = add i32 %9, %7
 store i32 %10, i32* %8
@@ -1678,10 +1679,25 @@ store i32 %10, i32* %8
      \caption{\texttt{clang -O1 -S -emit-llvm}}\label{fig:vector.ll}
    \end{minipage}
 \end{figure}
+\noindent Essentially \texttt{gep} instructions allow for unbounded array lookups, in that a \texttt{getelementptr} instruction is followed by the base address and one or more scaled offsets. What happens in Figure \ref{fig:vector.ll} is \texttt{vector} type is reduced to an \texttt{int} array, because it essentially is: in C, struct fields are generally  padded such that their respective memory addresses are aligned on four- or eight-byte boundaries \cite{cstd}.
+As such, accessing the third field entry corresponds to accessing the third element of an \texttt{int} array. The \texttt{getelementptr} instruction gets the pointer of this element by multiplying the size with the index and adding that to the base address.
+Therefore, the x86 that is generated essentially amounts to an \texttt{imul} instruction as can be seen in Figure 
 
+\begin{figure}[H]
+    \centering
+   \begin{minipage}{0.48\textwidth}
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{gas}
+movq %rdi, %rcx
+movq $0, %rax
+imulq $0, %rax
+movq $2, %rax
+imulq $8, %rax
+     \end{minted}
+     \caption{\texttt{dune exec build -{}- -t x86}}\label{fig:square0s}
+   \end{minipage}
+\end{figure}
 
-\subsubsection{Implementing \mintinline{llvm}{icmp} instructions} \label{impl-cond}
-The \mintinline{llvm}{icmp} and \mintinline{llvm}{select} instructions both rely on the \texttt{cmpx} x86 instruction for most of the heavy lifting.
 
 \subsubsection{Implementing \mintinline{llvm}{phi} instructions}\label{impl-phi}
 Another irregular instruction is the \mintinline{llvm}{phi} instruction representing the \(\Phi\)-functions. Their  intended purpose is to copy data from whichever predecessor node was executed.
