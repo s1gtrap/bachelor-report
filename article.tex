@@ -1279,6 +1279,23 @@ Similar to graph coloring, given \(k\) available GPRs, it assigns  as many varia
 It does this by first building the intervals using the \(\mathit{in}[s]\) and \(\mathit{out}[s]\) resulting from prior dataflow analysis.
 By keeping a list of active variables, on reaching the beginning of a new interval whith \(k\) variables already active, one of them need to be spilled such that the starting interval can be assigned a register. It could be chosen at random but that could be costly, instead some spilling heuristic is applied.
 
+Total time spent during compilation is somewhere around those listed in Figure \ref{fig:build-time}.
+
+\begin{figure}[H]
+  \centering
+  \begin{minipage}[b]{0.69\textwidth}
+    \begin{minted}[bgcolor=LightGray]{bash}
+$ time dune exec build -- tests/sha256.ll -a greedy
+38,72s user 0,07s system 99% cpu 38,833 total
+$ time dune exec build -- tests/sha256.ll -a linear
+38,72s user 0,04s system 99% cpu 38,813 total
+$ time dune exec build -- tests/sha256.ll -a simple
+120,55s user 0,07s system 99% cpu 2:00,74 total
+    \end{minted}
+    \caption{Runtime over single runs of compilation}\label{fig:build-time}
+  \end{minipage}
+\end{figure}
+
 
 
 %as can be seen in Figure \ref{fig:intervals-ocaml}.
@@ -2386,9 +2403,11 @@ arg & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 &
 
 \subsection{Future work}
 
-It goes without saying that there are countless optimnizations waiting to be made, but as the goal of this project was to explore the different approaches not many regards were had for the instruction selection itself. In fact, much more concern was taken for making sure each instruction was translated such that no other live variables were affected. The call instruction alone is probably a whole order of magnitude slower tha nenceesary. Likewise, the function pre-/epilogue are also overly cautious.
+It goes without saying that there are countless optimizations waiting to be made, but as the goal of this project was to explore the different approaches not many regards were had for the instruction selection itself. In fact, much more concern was taken for making sure each instruction was translated such that no other live variables were affected. The call instruction alone is probably a whole order of magnitude slower tha nenceesary. Likewise, the function pre-/epilogue are also overly cautious.
 
-Certainly the selection of benchmarks could also have been broader, with the cast majority just showing how Greedy is considerably slower. Not to mention more benchmarks with support for the Tiger compiler that was written the year prior. Likewise, some more detailed profiling of the entire compilation would have been interesting. Some 
+Certainly the selection of benchmarks could also have been broader, with the cast majority just showing how Greedy is considerably slower. Not to mention more benchmarks with support for the Tiger compiler that was written the year prior. Likewise, some more detailed profiling of the entire compilation would have been interesting. Some short descriptions of time taking during certain phases are included (see Figure \ref{fig:lva-time} and \ref{fig:build-time}) although a far more detailed report could've been made with instrumentation frameworks like Landmarks \cite{landmarks} as the time spent during compile time is quite significant, prticularly for JIT.
+
+The complexity of the liveness analysis phase could also be significantly improved, as 
 
 
 \section{Conclusion}
