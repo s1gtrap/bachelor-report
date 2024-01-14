@@ -715,7 +715,7 @@ how many columns are present in each.
 \makebox[\textwidth][c]{
 \begin{NiceTabular}{|c|c c|c c|c c|c c|c c|c c|c c|c c|}
   \hline
-  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out & in & out\\[-0.5ex]
+  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out & in & out\\
   \hline
   0  & 0  & 3 & 0  & 3 & 0  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8\\
   1  & 3  &  & 3  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8\\
@@ -732,14 +732,12 @@ how many columns are present in each.
 }
 \caption{Output of \texttt{dune exec build -{}- -t lva -v tests/count1.ll}}
 \label{tab:countll-rev-steps}
-\end{table}
-
-\begin{table}[H]
+\vspace{0.75em}
 \makebox[\textwidth][c]{
 \setlength{\tabcolsep}{0.9pt}
 \begin{NiceTabular}{|c|c c|c c|c c|c c|c c|c c|c c|c c|c c|c c|c c|c c|}
   \hline
-  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out\\[-0.5ex]
+  i & use & def & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out & in & out\\
   \hline
   0  & 0  & 3 & 0  &  & 0  & 3 & 0  & 3 & 0  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 3,8 & 0,8  & 0,3,8 & 0,8  & 0,3,8\\
   1  & 3  &  & 3  &  & 3  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 8 & 3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8 & 0,3,8  & 0,8\\
@@ -1228,6 +1226,11 @@ let coalesce v1 v2 (st, g) =
                 ( S.SS.fold (fun e l -> S.ST.add e v' l) s' st,
                   Lva.VT.add v1 v' vt |> Lva.VT.add v v',
                   None ))
+  \end{minted}
+\end{figure}
+\begin{figure}[H]
+  \centering
+  \begin{minted}[linenos,bgcolor=LightGray,firstnumber=20]{ocaml}
           else
             let s = Lva.G.V.label v in
             let v' = Lva.G.V.create s in
@@ -1255,8 +1258,18 @@ let coalesce v1 v2 (st, g) =
 \section{Linear Scan}
 Another approach that depends on liveness analysis is the linear scan algorithm.
 It is a simple and efficient approach that performs a linear pass over IR to produce a register assignment significantly faster than the steps involved with graph coloring.
-That said, it may generate more imprecise assignments and therefore also be less performant at runtime, so the utility of such an approach depends on the context in which it is used.
-While compilers like clang translate to machine code ahead-of-time (AOT), languages like C\# and Java will often rely on just-in-time (JIT) compilation to translate their respective VM instructions to native machine code. Such VMs that depend on JIT will often defer compilation to runtime. This is done for a myriad of reasons, portability and security among them, but usually at the cost of runtime performance. One of the reasons for this can be attributed to the way in which registers are allocated, as a significant downside of JIT is the fact it needs to be compiled in full before execution can begin. Therefore, generally a faster class of allocators is employed, linear scan being one of them, as linear scan is a reasonably performant alternative to graph coloring, that may be used to achieve reasonably efficient register assignments at runtime.
+That said, it may generate more imprecise assignments and therefore also be less performant at runtime, so the utility depends on the context in which it is used.
+
+While compilers like clang generally has an end-goal of machine code, languages like C\# and Java 
+will target a VM instead.
+This is done for a myriad of reasons, portability and security among them, but usually at the cost of runtime performance. One of the reasons for this is the fact that VM bytecode needs to be processed beforehands.
+While bytecode is generated ahead-of-time, running it on a target machine by interpreting such instructions in real time is inefficient.
+Therefore, bytecode is generally translated to native machine code immediately prior to being executed, a process known as \textit{just-in-time} (JIT) compilation.
+
+A significant downside of JIT is the fact it needs to be compiled in full before execution can begin, hence processes such as register allocation are deferred to runtime.
+Therefore, generally a faster class of allocators are used, linear scan being one of them, as linear scan is a reasonably performant alternative to graph coloring, that may be used to achieve reasonably efficient register assignments at runtime.
+%rely on just-in-time (JIT) compilation to translate their respective VM instructions to native machine code. Such VMs that depend on JIT will often
+%defer compilation to runtime. This is done for a myriad of reasons, portability and security among them, but usually at the cost of runtime performance. One of the reasons for this can be attributed to the way in which registers are allocated, as a significant downside of JIT is the fact it needs to be compiled in full before execution can begin. Therefore, generally a faster class of allocators is employed, linear scan being one of them, as linear scan is a reasonably performant alternative to graph coloring, that may be used to achieve reasonably efficient register assignments at runtime.
 %Whether or not to  a cost depends on the context, as JIT compilation will often 
 %reduced compile-time in  the fact that assignment is fast is a benefit in some cases.
 
@@ -1264,7 +1277,7 @@ The primary text is \textit{Linear Scan Register Allocation} \cite{linear}, the 
 Similar to graph coloring, given \(k\) available GPRs, it assigns  as many variables as possible, and spills the rest.
 
 It does this by first building the intervals using the \(\mathit{in}[s]\) and \(\mathit{out}[s]\) resulting from prior dataflow analysis.
-By keeping a list of active variables, on reaching the beginning of a new interval whith \(lk\) variables already actuve, one of them need to be spilled such that the starting interval can be assigned a register. It could be chosen at random but that could be costly, instead some spilling heuristic is applied.
+By keeping a list of active variables, on reaching the beginning of a new interval whith \(k\) variables already active, one of them need to be spilled such that the starting interval can be assigned a register. It could be chosen at random but that could be costly, instead some spilling heuristic is applied.
 
 
 
