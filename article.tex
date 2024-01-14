@@ -149,6 +149,16 @@ cbox/.style={draw,
 
 \section*{Abstract}
 Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Tellus at urna condimentum mattis. Enim facilisis gravida neque convallis. Enim facilisis gravida neque convallis a cras semper auctor. Vitae proin sagittis nisl rhoncus mattis rhoncus urna neque. Justo nec ultrices dui sapien eget mi proin. Id aliquet risus feugiat in ante. A cras semper auctor neque vitae tempus quam pellentesque nec. Nulla porttitor massa id neque aliquam vestibulum morbi. Facilisi cras fermentum odio eu. Odio pellentesque diam volutpat commodo sed egestas egestas fringilla. Amet consectetur adipiscing elit duis tristique sollicitudin nibh sit amet. Adipiscing at in tellus integer feugiat. A pellentesque sit amet porttitor. Sed elementum tempus egestas sed sed risus pretium quam. Quam viverra orci sagittis eu volutpat odio facilisis mauris sit. Arcu dictum varius duis at. Sociis natoque penatibus et magnis dis parturient montes. Varius sit amet mattis vulputate enim nulla aliquet. Ac ut consequat semper viverra. Scelerisque eleifend donec pretium vulputate sapien nec. Orci ac auctor augue mauris augue. Pulvinar mattis nunc sed blandit. Semper auctor neque vitae tempus quam pellentesque nec nam. Risus pretium quam vulputate dignissim. Dui faucibus in ornare quam viverra orci sagittis eu volutpat. Ac tortor vitae purus faucibus. Eu mi bibendum neque egestas congue quisque egestas diam in. Curabitur vitae nunc sed velit dignissim sodales ut eu sem. Arcu odio ut sem nulla.
+
+\section*{Acknowledgments}
+I would like to express my gratitude and thanks towards all who have facilitated me in making this project a part of reality.
+First of all, I can hardly begin to express my gratitude towards my advisors Aslan and Amin for the weekly meetings where most if not all of my confusion was settled.
+%Firstly, we would like to thank Bas Spitters, our supervisor, for his guidance and expertise on the subject, as
+%well as giving us the idea for the project. Without him this project would not have been possible. Secondly,
+%we thank Franziskus Kiefer for his helpfulness in answering questions about various Hacspec-related quirks,
+%issues, as well as being swift in these responses despite his large workload. Thirdly, we want to thank Las
+%Safin, who helped proofreading and thus make this report more bulletproof. Finally, we thank everyone who
+%helped answer questions over the various stages of the project. Your assistance is greatly appreciated
 \newpage
 
 \tableofcontents
@@ -796,7 +806,7 @@ let vert g e t =
       G.add_vertex g v;
       (v, S.ST.add e v t)
 \end{minted}
-Then the interference graph is derived in Figure \ref{fig:interf}. First, all parameters are connected, then the instructions are processed as described in the Appel text \cite[222]{tiger}: phi nodes, as they are the only \texttt{mov} instructions, interference edges are added with all  \(\mathit{out}[n] \setminus \{b_1, ..., b_n\}\) (see \eqref{phi}) while all others are just \(\mathit{out}[n]\).
+Then the interference graph is derived in Figure \ref{fig:interf}. First, all parameters are connected, then the instructions are processed as described in the Appel text \cite[222]{tiger}. As phi nodes are the only \texttt{mov} instructions, their interference edges are   \(\mathit{out}[n] \setminus \{b_1, ..., b_n\}\) (see \eqref{phi}) as opposed to  non-move instructions that are just \(\mathit{out}[n]\).
 
 \begin{figure}[H]
 \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
@@ -2154,6 +2164,10 @@ arg(s) & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear 12 & linea
 \end{table}
 
 \subsubsection{\lstinline!benches/fannkuch-redux.ll!}
+
+Fannkuch-redux involves a permutation algorithm that has a non-trivial algorithmic complexity. It requires both recursion and iterative processes, making it a good test for a language's ability to handle complex computations efficiently.
+The fannkuch algorithm is 
+
 \begin{table}[H]
 \makebox[\textwidth][c]{
 \begin{NiceTabular}{|c|cccccccc|}
@@ -2173,6 +2187,25 @@ arg & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear & greedy 12 &
 \end{table}
 
 
+\begin{table}[H]
+\makebox[\textwidth][c]{
+\begin{NiceTabular}{|c|ccccccccc|}
+\hline
+arg(s) & clang & simple 12 & simple 2 & briggs 12 & briggs 2 & linear 12 & linear 2 & greedy 12 & greedy 0 \\
+\hline
+4 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 171300& \cellcolor[rgb]{0.751953125,0.9990234375,0.75} 1.01148x& \cellcolor[rgb]{0.7568359375,0.9990234375,0.75} 1.02792x& \cellcolor[rgb]{0.755859375,0.9990234375,0.75} 1.02449x& \cellcolor[rgb]{0.755859375,0.9990234375,0.75} 1.02731x& \cellcolor[rgb]{0.7880859375,0.9990234375,0.75} 1.15660x& \cellcolor[rgb]{0.7841796875,0.9990234375,0.75} 1.13751x& \cellcolor[rgb]{0.8173828125,0.9990234375,0.75} 1.27163x& \cellcolor[rgb]{0.8037109375,0.9990234375,0.75} 1.21946x\\
+5 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 189030& \cellcolor[rgb]{0.76171875,0.9990234375,0.75} 1.04909x& \cellcolor[rgb]{0.771484375,0.9990234375,0.75} 1.08923x& \cellcolor[rgb]{0.7626953125,0.9990234375,0.75} 1.05266x& \cellcolor[rgb]{0.7705078125,0.9990234375,0.75} 1.08530x& \cellcolor[rgb]{0.8486328125,0.9990234375,0.75} 1.39953x& \cellcolor[rgb]{0.85546875,0.9990234375,0.75} 1.42370x& \cellcolor[rgb]{0.9033203125,0.9990234375,0.75} 1.61577x& \cellcolor[rgb]{0.908203125,0.9990234375,0.75} 1.63543x\\
+6 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 305772& \cellcolor[rgb]{0.8115234375,0.9990234375,0.75} 1.24795x& \cellcolor[rgb]{0.830078125,0.9990234375,0.75} 1.32393x& \cellcolor[rgb]{0.8125,0.9990234375,0.75} 1.25272x& \cellcolor[rgb]{0.83203125,0.9990234375,0.75} 1.33146x& \cellcolor[rgb]{0.9990234375,0.9873046875,0.75} 2.34850x& \cellcolor[rgb]{0.9990234375,0.9873046875,0.75} 2.37422x& \cellcolor[rgb]{0.9990234375,0.9609375,0.75} 3.21562x& \cellcolor[rgb]{0.9990234375,0.9599609375,0.75} 3.23381x\\
+7 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1331652& \cellcolor[rgb]{0.86328125,0.9990234375,0.75} 1.45633x& \cellcolor[rgb]{0.90625,0.9990234375,0.75} 1.62799x& \cellcolor[rgb]{0.8740234375,0.9990234375,0.75} 1.50098x& \cellcolor[rgb]{0.9091796875,0.9990234375,0.75} 1.64250x& \cellcolor[rgb]{0.9990234375,0.9580078125,0.75} 3.31242x& \cellcolor[rgb]{0.9990234375,0.955078125,0.75} 3.39020x& \cellcolor[rgb]{0.9990234375,0.904296875,0.75} 5.03373x& \cellcolor[rgb]{0.9990234375,0.9033203125,0.75} 5.06248x\\
+8 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 11197605& \cellcolor[rgb]{0.904296875,0.9990234375,0.75} 1.62006x& \cellcolor[rgb]{0.9375,0.9990234375,0.75} 1.75454x& \cellcolor[rgb]{0.89453125,0.9990234375,0.75} 1.58268x& \cellcolor[rgb]{0.939453125,0.9990234375,0.75} 1.76405x& \cellcolor[rgb]{0.9990234375,0.9482421875,0.75} 3.61197x& \cellcolor[rgb]{0.9990234375,0.9482421875,0.75} 3.62996x& \cellcolor[rgb]{0.9990234375,0.8876953125,0.75} 5.56708x& \cellcolor[rgb]{0.9990234375,0.888671875,0.75} 5.53880x\\
+9 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 112923594& \cellcolor[rgb]{0.9140625,0.9990234375,0.75} 1.66209x& \cellcolor[rgb]{0.9541015625,0.9990234375,0.75} 1.82157x& \cellcolor[rgb]{0.904296875,0.9990234375,0.75} 1.62219x& \cellcolor[rgb]{0.9453125,0.9990234375,0.75} 1.78657x& \cellcolor[rgb]{0.9990234375,0.947265625,0.75} 3.65915x& \cellcolor[rgb]{0.9990234375,0.94140625,0.75} 3.82090x& \cellcolor[rgb]{0.9990234375,0.880859375,0.75} 5.79421x& \cellcolor[rgb]{0.9990234375,0.8818359375,0.75} 5.75327x\\
+10 & \cellcolor[rgb]{0.75,0.9990234375,0.75} 1348654063& \cellcolor[rgb]{0.884765625,0.9990234375,0.75} 1.54471x& \cellcolor[rgb]{0.9306640625,0.9990234375,0.75} 1.72799x& \cellcolor[rgb]{0.896484375,0.9990234375,0.75} 1.59112x& \cellcolor[rgb]{0.943359375,0.9990234375,0.75} 1.77928x& \cellcolor[rgb]{0.9990234375,0.9501953125,0.75} 3.55946x& \cellcolor[rgb]{0.9990234375,0.9462890625,0.75} 3.68201x& \cellcolor[rgb]{0.9990234375,0.8828125,0.75} 5.71345x& \cellcolor[rgb]{0.9990234375,0.8837890625,0.75} 5.67565x\\
+\hline
+\end{NiceTabular}}
+\caption{\label{tab:fannkuch}Benchmark of \texttt{benches/sieven.ll} output by \mintinline{bash}{dune exec bench -- -f fib -n 1000}}
+\end{table}
+
+
 
 % TODO: comment that this is basically writing an llvm backend, except redoing all the register allocation stuff.
 
@@ -2185,7 +2218,9 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor i
 
 \section{Conclusion}
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Tellus at urna condimentum mattis. Enim facilisis gravida neque convallis. Enim facilisis gravida neque convallis a cras semper auctor. Vitae proin sagittis nisl rhoncus mattis rhoncus urna neque. Justo nec ultrices dui sapien eget mi proin. Id aliquet risus feugiat in ante. A cras semper auctor neque vitae tempus quam pellentesque nec. Nulla porttitor massa id neque aliquam vestibulum morbi. Facilisi cras fermentum odio eu. Odio pellentesque diam volutpat commodo sed egestas egestas fringilla. Amet consectetur adipiscing elit duis tristique sollicitudin nibh sit amet. Adipiscing at in tellus integer feugiat. A pellentesque sit amet porttitor. Sed elementum tempus egestas sed sed risus pretium quam. Quam viverra orci sagittis eu volutpat odio facilisis mauris sit. Arcu dictum varius duis at. Sociis natoque penatibus et magnis dis parturient montes. Varius sit amet mattis vulputate enim nulla aliquet. Ac ut consequat semper viverra. Scelerisque eleifend donec pretium vulputate sapien nec. Orci ac auctor augue mauris augue. Pulvinar mattis nunc sed blandit. Semper auctor neque vitae tempus quam pellentesque nec nam. Risus pretium quam vulputate dignissim. Dui faucibus in ornare quam viverra orci sagittis eu volutpat. Ac tortor vitae purus faucibus. Eu mi bibendum neque egestas congue quisque egestas diam in. Curabitur vitae nunc sed velit dignissim sodales ut eu sem. Arcu odio ut sem nulla.
+The intended goal of this project has been to implement both the graph coloring and linear scan algorithms and evaluate them both in terms of benefits and drawbacks when used to compile LLVM-{}- IR to x86 assembly.
+
+%Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Tellus at urna condimentum mattis. Enim facilisis gravida neque convallis. Enim facilisis gravida neque convallis a cras semper auctor. Vitae proin sagittis nisl rhoncus mattis rhoncus urna neque. Justo nec ultrices dui sapien eget mi proin. Id aliquet risus feugiat in ante. A cras semper auctor neque vitae tempus quam pellentesque nec. Nulla porttitor massa id neque aliquam vestibulum morbi. Facilisi cras fermentum odio eu. Odio pellentesque diam volutpat commodo sed egestas egestas fringilla. Amet consectetur adipiscing elit duis tristique sollicitudin nibh sit amet. Adipiscing at in tellus integer feugiat. A pellentesque sit amet porttitor. Sed elementum tempus egestas sed sed risus pretium quam. Quam viverra orci sagittis eu volutpat odio facilisis mauris sit. Arcu dictum varius duis at. Sociis natoque penatibus et magnis dis parturient montes. Varius sit amet mattis vulputate enim nulla aliquet. Ac ut consequat semper viverra. Scelerisque eleifend donec pretium vulputate sapien nec. Orci ac auctor augue mauris augue. Pulvinar mattis nunc sed blandit. Semper auctor neque vitae tempus quam pellentesque nec nam. Risus pretium quam vulputate dignissim. Dui faucibus in ornare quam viverra orci sagittis eu volutpat. Ac tortor vitae purus faucibus. Eu mi bibendum neque egestas congue quisque egestas diam in. Curabitur vitae nunc sed velit dignissim sodales ut eu sem. Arcu odio ut sem nulla.
 
 
 
