@@ -1415,8 +1415,7 @@ let intervalends insns (in_, out) =
 \begin{figure}[H]
      \centering
      \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
-let rec linearscan insns spills ?(v = 0)
-    (avail, active, assign, incstart, incend) =
+let rec linearscan insns spills (avail, active, assign, incstart, incend) =
   match IT.min_binding_opt incstart with
   | Some (i, ss) ->
       let e = S.SS.choose ss in
@@ -1433,6 +1432,12 @@ let rec linearscan insns spills ?(v = 0)
                 ( Regs.remove reg avail,
                   S.ST.add e reg active,
                   S.ST.add e (Reg reg) assign,
+     \end{minted}
+\end{figure}
+
+\begin{figure}[H]
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray,firstnumber=18]{ocaml}
                   incstart',
                   incend ) )
         | None ->
@@ -1453,12 +1458,6 @@ let rec linearscan insns spills ?(v = 0)
                   if S.SS.is_empty ss' then None else Some ss')
                 incend
             in
-     \end{minted}
-\end{figure}
-
-\begin{figure}[H]
-     \centering
-     \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
             ( spills + 1,
               expire i
                 ( avail,
