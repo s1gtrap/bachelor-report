@@ -1346,7 +1346,7 @@ define i32 @main (i32 %0, i8* %1) {
 
 At first, intervals are derived from the flattened instruction sequence and associated \(\mathit{in}[n]\) and \(\mathit{out}[n]\) sets. 
 %spilling heuristic can vary, but the one mentioned in the paper is chosen from remaining length, as in  \textit{\textquoteleft furthest away from the current point\textquoteright} \cite[900]{linear}. The same decision was made for this implementation, as it does stand to reduce the amount of spills necessary. See The program of Figure \ref{fig:linear.ll} and its associated live ranges/intervals of Figure \ref{fig:linear.lra}. For a target of \(k=2\), upon reaching the start of interval \texttt{\%5},  one variable needs to be spilled. If either \texttt{\%3} or \texttt{\%4} are chosen, in the case of \texttt{\%3} being spilled, already upon reaching \texttt{\%7} another needs to be spilled. In case of \texttt{\%4}, two variables won't be live simultaneously until \texttt{\%8}. Nonetheless, that means two spills instead of spilling the longest interval of \texttt{\%5}.
-While this can be done in a single pass with some creative array indexing, but my approach relies on two passes: one for finding the start points (see Figure \ref{fig:livenessstarts.ml}), the other for finding the end points.
+While this can be done in a single pass with some creative array indexing, my approach relies on two passes: one for finding the start points (see Figure \ref{fig:livenessstarts.ml}), the other for finding the end points.
 
 \begin{figure}[H]
   \centering
@@ -1391,107 +1391,116 @@ let intervalends insns (in_, out) =
 \end{figure}
 
 
-\noindent The opposite is quite similar (see Figure \ref{fig:intervalends.ml}), with the only real difference being the use of \texttt{List.fold\_right} instead of \texttt{List.fold\_left} to reduce the function body in reverse.
-
-
-\begin{figure}[H]
-     \centering
-     \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
-let intervals insns (in_, out) =
-  let insn (starts, t, active) (i, n) =
-    let init s (added, t, active) = (* .. *) in
-    let end_ s (added, t, active) = (* .. *) in
-    let a, t, c =
-      init in_.(i) (S.SS.empty, t, active) |> init out.(i) |> end_ out.(i)
-    in
-    ((i, n, a) :: starts, t, c)
-  in
-  let starts, _, active =
-    List.fold_left insn
-      ([], S.ST.empty, Array.init (List.length insns) (Fun.const S.SS.empty))
-      insns
-  in
-  List.rev starts |> List.map (fun (i, n, a) -> (i, n, a, active.(i)))
-     \end{minted}
-     \caption{Implementation of \texttt{intervals} in \texttt{linear.ml}}\label{fig:intervals-ocaml}
-\end{figure}
-
-\noindent The array indexing is used in the inner functions of \texttt{init} and \texttt{end\_} to unset the last point at which an interval goes out of scope and are defined in Figure \ref{fig:init-ocaml} and \ref{fig:end_-ocaml} respectively.
+\noindent The opposite, i.e. finding the interval ends, is quite similar (see Figure \ref{fig:intervalends.ml}), with the only real difference being the use of \texttt{List.fold\_right} instead of \texttt{List.fold\_left} to reduce the function body in reverse.
 
 \begin{figure}[H]
      \centering
      \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
-let init s (added, t, active) =
-  ( S.SS.filter (fun s -> not (S.ST.mem s t)) s |> S.SS.union added,
-    S.SS.fold
-      (fun s t ->
-        S.ST.update s
-          (function
-            | Some j ->
-                active.(i) <- S.SS.add s active.(i);
-                active.(j) <- S.SS.remove s active.(j);
-                Some i
-            | None ->
-                active.(i) <- S.SS.add s active.(i);
-                Some i)
-          t)
-      s t,
-    active )
+let rec linearscan insns spills ?(v = 0)
+    (avail, active, assign, incstart, incend) =
+  match IT.min_binding_opt incstart with
+  | Some (i, ss) ->
+      let e = S.SS.choose ss in
+      let ss' = S.SS.remove e ss in
+      let incstart' =
+        if S.SS.is_empty ss' then IT.remove i incstart
+        else IT.add i ss' incstart
+      in
+      let spills, (avail', active', assign', incstart', incend') =
+        match Regs.choose_opt avail with
+        | Some reg ->
+            ( spills,
+              expire i
+                ( Regs.remove reg avail,
+                  S.ST.add e reg active,
+                  S.ST.add e (Reg reg) assign,
+                  incstart',
+                  incend ) )
+        | None ->
+            let _j, spill =
+              IT.filter
+                (fun _k v -> S.SS.exists (fun e -> S.ST.mem e active) v)
+                incend
+              |> IT.max_binding
+            in
+            let spill =
+              S.SS.filter (fun e -> S.ST.mem e active) spill |> S.SS.choose
+            in
+            let reg = S.ST.find spill active in
+            let incend' =
+              IT.filter_map
+                (fun _ ss ->
+                  let ss' = S.SS.remove spill ss in
+                  if S.SS.is_empty ss' then None else Some ss')
+                incend
+            in
      \end{minted}
-     \caption{Implementation of \texttt{init} in \texttt{linear.ml}}\label{fig:init-ocaml}
 \end{figure}
 
 \begin{figure}[H]
      \centering
      \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
-let end_ s (added, t, active) =
-  ( S.SS.filter (fun s -> not (S.ST.mem s t)) s |> S.SS.union added,
-    S.SS.fold
-      (fun s t ->
-        S.ST.update s
-          (function
-            | Some j ->
-                active.(i) <- S.SS.add s active.(i);
-                active.(j) <- S.SS.remove s active.(j);
-                Some i
-            | None -> Some i)
-          t)
-      s t,
-    active )
-     \end{minted}
-     \caption{Implementation of \texttt{end\_} in \texttt{linear.ml}}\label{fig:end_-ocaml}
-\end{figure}
-
-
-
-\begin{figure}[H]
-     \centering
-     \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
-let linearscan k insns =
-  let avail = Regs.of_list (List.init k reg_of_int) in
-  let insn (avail, active, assign) (_, _n, s, _e) =
-    (*Printf.printf "%s\n" (Cfg.string_of_insn n);*)
-    let start s (avail, active, assign) =
-      match Regs.choose_opt avail with
-      | Some reg -> (Regs.remove reg avail, S.ST.add s reg active, assign)
-      | None ->
-          (* FIXME: order by remaining or total length *)
-          let z, reg = S.ST.choose active in
-          ( avail,
-            S.ST.remove z active |> S.ST.add s reg,
-            S.ST.add z
-              (Ind3 (Lit (Int64.of_int ((S.ST.cardinal assign * -8) - 8)), Rbp))
-              assign )
-    in
-    S.SS.fold start s (avail, active, assign)
-  in
-  let _, active, assign =
-    List.fold_left insn (avail, S.ST.empty, S.ST.empty) insns
-  in
-  S.ST.fold (fun k v acc -> S.ST.add k (Reg v) acc) active assign
+            ( spills + 1,
+              expire i
+                ( avail,
+                  S.ST.remove spill active |> S.ST.add e reg,
+                  S.ST.remove spill assign
+                  |> S.ST.add spill (stack spills)
+                  |> S.ST.add e (Reg reg),
+                  incstart',
+                  incend' ) )
+      in
+      linearscan insns spills (avail', active', assign', incstart', incend')
+  | None -> expire (List.length insns) (avail, active, assign, incstart, incend)
      \end{minted}
      \caption{Implementation of \texttt{linearscan} in \texttt{linear.ml}}\label{fig:linearscan-ocaml}
 \end{figure}
+\noindent The implementation of the actual linearscan iteration in Figure \ref{fig:linearscan-ocaml} is quite tedious, but the core idea is the outerermost \texttt{match} block. The smallest interval is selected using \texttt{min\_binding\_opt}. This is done to visit each interval in increasing order of start point. If there are none left, the linearscan iteration is essentially over, but calls \texttt{expire} regardless to clean things up. The case of intervals remaining is more interesting, as one of the variables starting at \(i\) needs to be assigned. First a variable is chosen, the order of this is not important. Despite the minimal example used in Figure \ref{fig:linear.ll}, there are cases where several intervals begin at the same point (e.g. loops), hence a symbol set is used. Lines 7-10 are just concerned with removing the chosen variable from the table of increasing start points. Then, an available register is chosen. If one is available (line 13), it is 1) removed from the set of available registers, 2) added to the symbol table of active variables, and 3) assigned the same register in the returned assignments table. If no registers are available on the other hand (line 21), a variable needs to be spilled. It does this by first filtering through and only visiting the end points that are currently active (i.e. members of \texttt{active}). Then the one of intervals that are currently active with the greatest end points is chosen by first filtering end points for which at least of the variables is active (lines 23-26), and then selecting one of those immediately after (line 29). The currently assigned register of that variable is then looked up (line 31) and the end point is removed (lines 33-37). 
+
+In the case of spilling, the idea is to 1) remove the previously assigned variable with the greatest remaining length from the active set, 2) assign the previously assigned variable to the nextmost available stack slot, and 3) assign the currently visited start interval to the register just unassigned from the spilled variable.
+
+In either of those cases, the \texttt{expire} function is called right after. This is to ensure there are no variables left in the table of increading end points, and that their previously assigned registers are put back in the available set of registers as can be seen in Figure \ref{fig:expire-ocaml}.
+
+
+\begin{figure}[H]
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let rec expire i (avail, active, assign, incstart, incend) =
+  match IT.min_binding_opt incend with
+  | Some (j, end_) ->
+      if j >= i then (avail, active, assign, incstart, incend)
+      else
+        let s = S.SS.choose end_ in
+        let reg = S.ST.find s active in
+        let active' = S.ST.remove s active in
+        let avail' = Regs.add reg avail in
+        let incend' = IT.remove j incend in
+        expire i (avail', active', assign, incstart, incend')
+  | None -> (avail, active, assign, incstart, incend)
+     \end{minted}
+     \caption{Implementation of \texttt{expire} in \texttt{lib/linear.ml}}\label{fig:expire-ocaml}
+\end{figure}
+
+\noindent Putting it all together, is the \texttt{alloc} function in \texttt{lib/linear.ml} that builds the set of available registers from the \(k\) passed, builds the increasing interval starts and ends tables, and finally, begins the iteratice process of linear scan.
+\begin{figure}[H]
+     \centering
+     \begin{minted}[linenos,bgcolor=LightGray]{ocaml}
+let alloc k insns (in_, out) =
+  let avail = List.init k reg_of_int |> Regs.of_list in
+  let insns = List.mapi (fun i n -> (i, n)) insns in
+  let incstart, _, _ = intervalstart insns (in_, out) in
+  let incend, _, _ = intervalends insns (in_, out) in
+  let _, _, asn, _, _ =
+    linearscan insns 0 (avail, S.ST.empty, S.ST.empty, incstart, incend)
+  in asn
+     \end{minted}
+     \caption{Implementation of \texttt{alloc} in \texttt{lib/linear.ml}}\label{fig:intervals-ocaml}
+\end{figure}
+
+
+
+
+
 
 
 % TODO: find ud af hvad binpacking er
