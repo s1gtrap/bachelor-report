@@ -150,11 +150,17 @@ cbox/.style={draw,
 
 
 \section*{Abstract}
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Tellus at urna condimentum mattis. Enim facilisis gravida neque convallis. Enim facilisis gravida neque convallis a cras semper auctor. Vitae proin sagittis nisl rhoncus mattis rhoncus urna neque. Justo nec ultrices dui sapien eget mi proin. Id aliquet risus feugiat in ante. A cras semper auctor neque vitae tempus quam pellentesque nec. Nulla porttitor massa id neque aliquam vestibulum morbi. Facilisi cras fermentum odio eu. Odio pellentesque diam volutpat commodo sed egestas egestas fringilla. Amet consectetur adipiscing elit duis tristique sollicitudin nibh sit amet. Adipiscing at in tellus integer feugiat. A pellentesque sit amet porttitor. Sed elementum tempus egestas sed sed risus pretium quam. Quam viverra orci sagittis eu volutpat odio facilisis mauris sit. Arcu dictum varius duis at. Sociis natoque penatibus et magnis dis parturient montes. Varius sit amet mattis vulputate enim nulla aliquet. Ac ut consequat semper viverra. Scelerisque eleifend donec pretium vulputate sapien nec. Orci ac auctor augue mauris augue. Pulvinar mattis nunc sed blandit. Semper auctor neque vitae tempus quam pellentesque nec nam. Risus pretium quam vulputate dignissim. Dui faucibus in ornare quam viverra orci sagittis eu volutpat. Ac tortor vitae purus faucibus. Eu mi bibendum neque egestas congue quisque egestas diam in. Curabitur vitae nunc sed velit dignissim sodales ut eu sem. Arcu odio ut sem nulla.
+In this day and age compilers are used in more places than one would think of at a glance.
+While programmers heavily rely on them to get their work done in a reasonable amount of time, %, as the ability to manually construct machine code is a ridiculous expectation to have.
+ quite a significant amount of time that could otherwise have been spent being productive
+ is spent waiting on the compiler to finish, hence the productivity in the field of software development stands to benefit from improved efficiency.
+ Likewise, programming languages that used to be run by interpreting source text text chunks at a time are now being  translated to raw machine instructions immediately prior to execution just to squeeze out fractions of performance benefits on computers as Moore's law seems to nearing it's natural limit as dictated by the laws of our universe. 
 
 \section*{Acknowledgments}
 I would like to express my sincere gratitude and thanks to all who have supported me in making this project a part of reality.
 First of all, I can hardly begin to express my gratitude towards my advisors Aslan and Amin for the weekly meetings where most if not all concerns were settled.
+I'm also grateful for any fellow students who gave me inspiration and some insight along the way, naturally including some additional test cases that did manage to eek  out some bugs.
+Additionally, all of the program snippets I have found online around the place have been quite helpful and saved me a lot of time, including of course the source of some benchmarks.
 %Firstly, we would like to thank Bas Spitters, our supervisor, for his guidance and expertise on the subject, as
 %well as giving us the idea for the project. Without him this project would not have been possible. Secondly,
 %we thank Franziskus Kiefer for his helpfulness in answering questions about various Hacspec-related quirks,
@@ -2414,12 +2420,17 @@ It goes without saying that there are countless optimizations waiting to be made
 
 Certainly the selection of benchmarks could also have been broader, with the cast majority just showing how Greedy is considerably slower. Not to mention more benchmarks with support for the Tiger compiler that was written the year prior. Likewise, some more detailed profiling of the entire compilation would have been interesting. Some short descriptions of time taking during certain phases are included (see Figure \ref{fig:lva-time} and \ref{fig:build-time}) although a far more detailed report could've been made with instrumentation frameworks like Landmarks \cite{landmarks} as the time spent during compile time is quite significant, prticularly for runtime environments that depend on JIT, but also for AOT compilers as long compile times can negatively affect productivity.
 
-The complexity of the liveness analysis phase could also be significantly improved, as 
+As for the liveness analysis, research has been conducted allowing for liveness analysis to be conducted over IR of strict SSA form in only two passes \cite{BrandnerFlorian2011CLSf} shadowing  the current approach that depends on iterative dataflow analysis. Similarly, linear scan can be aware of 'holes' in live ranges such that variables don't need to live across widely disjointed basic blocks.
+
+%The complexity of the liveness analysis phase could also be significantly improved, as 
 
 
 \section{Conclusion}
 
 The intended goal of this project has been to implement both the graph coloring and linear scan algorithms and evaluate them both in terms of benefits and drawbacks when used to compile LLVM-{}- IR to x86 assembly.
+At first, control flow analysis was implemented to generate a control-flow graph. As this finalized,
+dataflow analysis was applied to derive live ranges for each variable, which was eventually used to conduct both the graph coloring by simplifcation and linear scan algoritms. All the way throughout development a test framework has been evolving with the phases to validate correct- and soundness to some degree.
+
 
 %Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Tellus at urna condimentum mattis. Enim facilisis gravida neque convallis. Enim facilisis gravida neque convallis a cras semper auctor. Vitae proin sagittis nisl rhoncus mattis rhoncus urna neque. Justo nec ultrices dui sapien eget mi proin. Id aliquet risus feugiat in ante. A cras semper auctor neque vitae tempus quam pellentesque nec. Nulla porttitor massa id neque aliquam vestibulum morbi. Facilisi cras fermentum odio eu. Odio pellentesque diam volutpat commodo sed egestas egestas fringilla. Amet consectetur adipiscing elit duis tristique sollicitudin nibh sit amet. Adipiscing at in tellus integer feugiat. A pellentesque sit amet porttitor. Sed elementum tempus egestas sed sed risus pretium quam. Quam viverra orci sagittis eu volutpat odio facilisis mauris sit. Arcu dictum varius duis at. Sociis natoque penatibus et magnis dis parturient montes. Varius sit amet mattis vulputate enim nulla aliquet. Ac ut consequat semper viverra. Scelerisque eleifend donec pretium vulputate sapien nec. Orci ac auctor augue mauris augue. Pulvinar mattis nunc sed blandit. Semper auctor neque vitae tempus quam pellentesque nec nam. Risus pretium quam vulputate dignissim. Dui faucibus in ornare quam viverra orci sagittis eu volutpat. Ac tortor vitae purus faucibus. Eu mi bibendum neque egestas congue quisque egestas diam in. Curabitur vitae nunc sed velit dignissim sodales ut eu sem. Arcu odio ut sem nulla.
 
